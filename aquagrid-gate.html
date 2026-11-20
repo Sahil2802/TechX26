@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaGrid Throttle Gate</title>
+<style>
+:root{color-scheme:light;--bg:#f6f5f0;--panel:#fff;--ink:#1b2430;--mut:#566170;--line:#cfd5db;--water:#3a8fd1;--water2:#b9dcf3;
+--red:#d0312d;--redbg:#fde8e7;--amb:#a86f00;--ambbg:#fff1cf;--ok:#17814a;--okbg:#e0f4e8;--steel:#8d98a4;--gold:#b8860b}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1040px;margin:0 auto;padding:24px 16px 56px}
+h1{font-size:26px;margin:0 0 4px;letter-spacing:-.01em}
+h2{font-size:16px;margin:28px 0 8px}
+.lede{color:var(--mut);margin:0 0 14px;max-width:70ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;padding:0;list-style:none}
+.chips li{background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:13px;margin:0}
+.chips .hot{border-color:var(--amb);background:var(--ambbg)}
+.stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+svg{display:block;min-width:760px;width:100%;height:auto}
+svg text{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;fill:var(--ink)}
+.ttl{font-size:14px;font-weight:700;letter-spacing:.04em}
+.sub{font-size:11px;fill:var(--mut)}
+.sm{font-size:12px}
+.mono{font-family:ui-monospace,Consolas,monospace}
+.panel{fill:#fbfbf9;stroke:var(--line);stroke-width:1.5}
+.pipe{stroke:var(--steel);fill:none}
+.pipeIn{stroke:var(--water2);fill:none}
+[data-tip]{cursor:pointer}
+[data-tip]:hover .hl{stroke:var(--ink);stroke-width:2.5}
+:focus-visible{outline:3px solid #1d6fe0;outline-offset:3px;border-radius:4px}
+svg :focus-visible{outline:none}
+svg :focus-visible .hl{stroke:#1d6fe0;stroke-width:3.5}
+#lever,#slot{touch-action:none;cursor:grab}
+#lever:active{cursor:grabbing}
+#keyrot{transition:transform .35s cubic-bezier(.25,1,.5,1)}
+#wheel{transition:transform .5s ease}
+.shake{animation:shake .4s}
+@keyframes shake{20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+.pulse{animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.35}}
+.flow{stroke-dasharray:6 6;animation:flow .6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-12}}
+.tip{min-height:3.2em;margin:10px 2px 0;color:var(--mut);font-size:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+.cell{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.cell small{display:block;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.cell b{display:block;font:700 24px/1.2 ui-monospace,Consolas,monospace}
+.cell span{font-size:12px;color:var(--mut)}
+#status{font:700 15px/1.3 system-ui,sans-serif;letter-spacing:.03em;padding:4px 0}
+.s-blocked{background:var(--redbg);border-color:var(--red)!important;color:var(--red)}
+.s-await{background:var(--ambbg);border-color:var(--amb)!important;color:var(--amb)}
+.s-ok{background:var(--okbg);border-color:var(--ok)!important;color:var(--ok)}
+.bad{color:var(--red)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+button{font:inherit;background:var(--panel);border:1px solid var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--ink)}
+button:hover{background:#eef1f4}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:18px}
+ol,ul{padding-left:20px;margin:6px 0}
+li{margin:5px 0}
+.log{font:13px/1.45 ui-monospace,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px 10px 36px;min-height:5em}
+.note{color:var(--mut);font-size:13px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+<h1>Why AquaGrid won't throttle at peak tariff</h1>
+<p class="lede">A gated reservoir. The AI can pull the lever, but only code can lock it out, and only a human with the key can move the valve. Pull the lever, then try to get the valve to move.</p>
+<ul class="chips">
+  <li class="hot">13:55 Sector 4 leak starts</li>
+  <li>14:00 peak tariff begins</li>
+  <li class="hot">Algal-bloom warning on seawater intake</li>
+  <li class="hot">Sector 4 pressure sensor S4-P2 drifted/flatlined</li>
+</ul>
+
+<div class="stage">
+<svg id="svg" viewBox="0 -30 1000 600" role="group" aria-label="AquaGrid reservoir gate model">
+<defs>
+  <pattern id="hatchAmb" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#fff1cf"/><line x1="0" y1="0" x2="0" y2="6" stroke="#a86f00" stroke-width="2"/></pattern>
+  <pattern id="hatchRed" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#fde8e7"/><line x1="0" y1="0" x2="0" y2="6" stroke="#d0312d" stroke-width="2"/></pattern>
+  <clipPath id="tankClip"><rect x="700" y="100" width="120" height="300"/></clipPath>
+  <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L8,4L0,8z" fill="#566170"/></marker>
+</defs>
+
+<!-- read-only telemetry, one-way -->
+<path d="M831,100 V-12 H100 V18" fill="none" stroke="#566170" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+<text x="430" y="-18" text-anchor="middle" class="sub">READ-ONLY TELEMETRY · plant → AI, one way</text>
+
+<!-- AI panel -->
+<g>
+  <rect class="panel" x="10" y="20" width="180" height="520" rx="12"/>
+  <text x="100" y="48" text-anchor="middle" class="ttl">AI AGENT</text>
+  <text x="100" y="64" text-anchor="middle" class="sub">proposes only · no write handle</text>
+  <g data-tip="lever">
+    <rect id="slot" x="94" y="110" width="12" height="220" rx="6" fill="#dfe3e8"/>
+    <line id="safeTick" x1="76" x2="124" stroke="#d0312d" stroke-width="2"/>
+    <text id="safeTxt" x="72" text-anchor="end" class="sub" style="fill:#d0312d"></text>
+    <text x="142" y="114" class="sub">0 hold</text>
+    <text x="142" y="334" class="sub">500</text>
+    <g id="lever" role="slider" tabindex="0" aria-label="AI throttle lever" aria-valuemin="0" aria-valuemax="500" aria-valuenow="500">
+      <rect class="hl" x="-34" y="-13" width="68" height="26" rx="7" fill="#1b2430" stroke="#1b2430"/>
+      <text id="leverTxt" y="5" text-anchor="middle" style="fill:#fff" class="sm mono"></text>
+    </g>
+    <text x="100" y="356" text-anchor="middle" class="sub">drag ↓ to throttle · ↑↓ keys</text>
+  </g>
+  <rect class="panel" x="28" y="376" width="144" height="60" rx="8" fill="#fff"/>
+  <text x="100" y="394" text-anchor="middle" class="sub">PROPOSAL SLIP</text>
+  <text id="slipTxt" x="100" y="412" text-anchor="middle" class="sm mono"></text>
+  <text x="100" y="427" text-anchor="middle" class="sub">sent to gateway →</text>
+  <line x1="172" y1="406" x2="238" y2="406" stroke="#566170" stroke-width="1.5" marker-end="url(#arr)"/>
+  <g id="bypass" role="button" tabindex="0" aria-label="Make the AI try to move the valve directly" data-tip="bypass">
+    <rect class="hl" x="28" y="462" width="144" height="46" rx="8" fill="#fff" stroke="#d0312d" stroke-width="1.5"/>
+    <text x="100" y="482" text-anchor="middle" class="sm" style="fill:#d0312d;font-weight:600">AI tries to move</text>
+    <text x="100" y="498" text-anchor="middle" class="sm" style="fill:#d0312d;font-weight:600">the valve directly</text>
+  </g>
+  <circle id="bolt" cx="172" cy="485" r="6" fill="#d0312d" opacity="0"/>
+</g>
+
+<!-- Write gateway -->
+<g>
+  <rect class="panel" x="215" y="20" width="210" height="520" rx="12" stroke="#1b2430" stroke-width="2.5"/>
+  <text x="320" y="48" text-anchor="middle" class="ttl">WRITE GATEWAY</text>
+  <text x="320" y="64" text-anchor="middle" class="sub">code re-checks · human approves</text>
+  <g data-tip="lamp1"><circle id="l1" cx="243" cy="104" r="10" stroke="#1b2430"/><text x="262" y="100" class="sm" style="font-weight:700">FLOOR CHECK</text><text id="l1t" x="262" y="116" class="sub"></text></g>
+  <g data-tip="lamp2"><circle cx="243" cy="158" r="10" stroke="#1b2430" fill="#e0f4e8"/><text x="262" y="154" class="sm" style="font-weight:700">SENSOR CHECK</text><text x="262" y="170" class="sub">S4-P2 quarantined, excluded</text></g>
+  <g data-tip="lamp3"><circle id="l3" cx="243" cy="212" r="10" stroke="#1b2430"/><text x="262" y="208" class="sm" style="font-weight:700">OPERATOR KEY</text><text id="l3t" x="262" y="224" class="sub"></text></g>
+
+  <g transform="translate(320,330)" data-tip="key">
+    <g id="keyWrap">
+      <text x="-50" y="-26" text-anchor="end" class="sub">OFF</text><text x="50" y="-26" class="sub">ON</text>
+      <g id="keyBtn" role="switch" tabindex="0" aria-label="Operator key switch" aria-checked="false">
+        <circle class="hl" r="40" fill="#eef1f4" stroke="#8d98a4" stroke-width="3"/>
+        <g id="keyrot">
+          <rect x="-4" y="-34" width="8" height="34" rx="2" fill="#b8860b"/>
+          <rect x="4" y="-30" width="6" height="5" fill="#b8860b"/><rect x="4" y="-21" width="6" height="5" fill="#b8860b"/>
+          <circle r="12" fill="#d4a017" stroke="#8a6508" stroke-width="2"/><circle r="4" fill="#fff6d6"/>
+        </g>
+      </g>
+    </g>
+    <text y="62" text-anchor="middle" class="sm" style="font-weight:700">KEY SWITCH</text>
+    <text y="77" text-anchor="middle" class="sub">operator only · click / Space</text>
+  </g>
+  <line x1="320" y1="410" x2="320" y2="480" stroke="#8d98a4" stroke-width="3" stroke-dasharray="3 3"/>
+  <g data-tip="contactor">
+    <circle cx="250" cy="490" r="5" fill="#1b2430"/><circle cx="380" cy="490" r="5" fill="#1b2430"/>
+    <line id="blade" x1="250" y1="490" x2="380" y2="490" stroke="#1b2430" stroke-width="5" stroke-linecap="round" style="transition:transform .3s;transform-origin:250px 490px"/>
+    <text x="315" y="520" text-anchor="middle" class="sub">WRITE CONTACTOR</text>
+  </g>
+</g>
+
+<!-- Physical network -->
+<text x="470" y="48" class="ttl">WATER NETWORK (physical)</text>
+<g data-tip="bloom">
+  <rect x="462" y="116" width="130" height="44" rx="8" fill="#fff1cf" stroke="#a86f00" stroke-width="1.5"/>
+  <text x="527" y="134" text-anchor="middle" class="sm" style="fill:#a86f00;font-weight:700">⚠ ALGAL BLOOM</text>
+  <text x="527" y="150" text-anchor="middle" class="sub">warning active</text>
+</g>
+<rect x="470" y="180" width="110" height="46" rx="6" fill="#e9eef3" stroke="#8d98a4" stroke-width="2"/>
+<text x="525" y="199" text-anchor="middle" class="sm" style="font-weight:700">SEAWATER</text><text x="525" y="215" text-anchor="middle" class="sm" style="font-weight:700">INTAKE</text>
+<path class="pipe" stroke-width="14" d="M525,226 V290"/><path class="pipeIn" stroke-width="8" d="M525,226 V290"/>
+<g data-tip="plant">
+  <rect x="470" y="290" width="110" height="80" rx="6" fill="#e9eef3" stroke="#8d98a4" stroke-width="2"/>
+  <text x="525" y="316" text-anchor="middle" class="sm" style="font-weight:700">DESAL PLANT</text>
+  <text id="plantTxt" x="525" y="340" text-anchor="middle" class="sub"></text>
+</g>
+<path class="pipe" stroke-width="20" d="M580,335 H700"/><path class="pipeIn" stroke-width="14" d="M580,335 H700"/>
+
+<!-- write cable -->
+<path d="M380,490 H425" fill="none" stroke="#8d98a4" stroke-width="3"/>
+<path id="cable" d="M425,490 H640 V366" fill="none" stroke="#8d98a4" stroke-width="3"/>
+<text x="532" y="480" text-anchor="middle" class="sub">WRITE CABLE (dead unless key turned)</text>
+
+<!-- valve -->
+<g transform="translate(640,335)" data-tip="valve">
+ <g id="valve">
+  <rect class="hl" x="-18" y="-16" width="36" height="32" rx="3" fill="#dfe3e8" stroke="#566170" stroke-width="2"/>
+  <rect id="gate" x="-3" y="-16" width="6" height="0" fill="#1b2430"/>
+  <rect x="-6" y="-32" width="12" height="16" fill="#cfd5db" stroke="#566170"/>
+  <g transform="translate(0,-40)"><g id="wheel"><line x1="-17" y1="0" x2="17" y2="0" stroke="#1b2430" stroke-width="5" stroke-linecap="round"/><line x1="0" y1="-5" x2="0" y2="5" stroke="#1b2430" stroke-width="5"/></g></g>
+  <rect x="-10" y="16" width="20" height="14" fill="#566170"/>
+  <g id="lock">
+    <rect x="-28" y="-24" width="56" height="6" rx="2" fill="#d0312d"/><rect x="-28" y="18" width="56" height="6" rx="2" fill="#d0312d"/>
+    <path d="M18,-44 v-6 a7,7 0 0 1 14,0 v6" fill="none" stroke="#d0312d" stroke-width="3"/>
+    <rect x="14" y="-45" width="22" height="16" rx="3" fill="#d0312d"/><circle cx="25" cy="-37" r="2.5" fill="#fff"/>
+  </g>
+ </g>
+</g>
+<text x="640" y="246" text-anchor="middle" class="sm" style="font-weight:700">THROTTLE VALVE</text>
+<text id="valveTxt" x="630" y="396" text-anchor="end" class="sub"></text>
+
+<!-- reservoir -->
+<g data-tip="gauge">
+  <text x="760" y="90" text-anchor="middle" class="ttl">RESERVOIR R1</text>
+  <rect x="700" y="100" width="120" height="300" fill="#fff"/>
+  <g clip-path="url(#tankClip)">
+    <rect id="water" x="700" width="120" fill="#3a8fd1" opacity=".85"/>
+    <rect id="ghost" x="700" width="120"/>
+    <rect x="700" y="280" width="120" height="120" fill="#d0312d" opacity=".07"/>
+  </g>
+  <rect class="hl" x="700" y="100" width="120" height="300" fill="none" stroke="#1b2430" stroke-width="2.5"/>
+  <text id="r1Txt" x="710" class="sm mono" style="font-weight:700"></text>
+  <g id="scale"></g>
+  <rect x="822" y="100" width="18" height="300" fill="none" stroke="#8d98a4"/>
+  <g id="proj"><polygon points="0,0 14,-8 14,8" id="projTri"/><text id="projTxt" x="18" y="-10" class="sm mono" style="font-weight:700"></text></g>
+</g>
+<g data-tip="floor">
+  <line id="floorLn" x1="690" x2="840" y1="280" y2="280" stroke="#d0312d" stroke-width="3.5"/>
+  <text x="694" y="273" text-anchor="end" class="sm" style="fill:#d0312d;font-weight:800">FLOOR 40%</text>
+</g>
+
+<!-- town pipe + Sector 4 -->
+<path class="pipe" stroke-width="16" d="M760,400 V440 H990"/><path class="pipeIn" stroke-width="10" d="M760,400 V440 H990"/>
+<text x="772" y="466" class="sub">TOWN DEMAND</text><text x="772" y="481" class="sm mono" style="font-weight:700">2,000 m³/h</text>
+<g data-tip="leak">
+  <text x="925" y="396" text-anchor="middle" class="sm" style="font-weight:700">SECTOR 4</text>
+  <text x="902" y="414" text-anchor="middle" class="sub" style="fill:#d0312d;font-weight:700">LEAK</text>
+  <circle cx="898" cy="424" r="2.5" fill="#3a8fd1"/><circle cx="906" cy="426" r="2.5" fill="#3a8fd1"/><circle cx="902" cy="421" r="2" fill="#3a8fd1"/>
+</g>
+<g id="sensors"></g>
+<g data-tip="guard">
+  <rect x="850" y="515" width="140" height="42" rx="6" fill="#fff" stroke="#1b2430" stroke-width="1.5"/>
+  <text x="920" y="531" text-anchor="middle" class="sub" style="font-weight:700">SENSOR GUARD (code)</text>
+  <text x="920" y="548" text-anchor="middle" class="sub">P1 ok · <tspan style="fill:#d0312d;font-weight:700">P2 ✕ cut</tspan> · P3 ok</text>
+</g>
+<text id="bypassMsg" x="320" y="556" text-anchor="middle" class="sm" style="fill:#d0312d;font-weight:700" opacity="0">✕ no write handle: rejected</text>
+</svg>
+</div>
+<p id="tip" class="tip">Hover any part to see what it is. Drag the lever, or focus it and use ↑ ↓.</p>
+
+<div class="grid" aria-label="Live readout">
+  <div class="cell"><small>R1 now</small><b id="oR1"></b></div>
+  <div class="cell"><small>Projected R1</small><b id="oProj"></b><span id="oMargin"></span></div>
+  <div class="cell"><small>Floor</small><b id="oFloor"></b><span>hard-coded in code</span></div>
+  <div class="cell"><small>Throttle proposed</small><b id="oThr"></b><span id="oAct"></span></div>
+  <div class="cell" id="oStatusCell"><small>Status</small><b id="status" role="status"></b><span id="oWhy"></span></div>
+</div>
+<div class="row">
+  <span class="note">Try:</span>
+  <button data-set="0">Hold output (0)</button>
+  <button data-set="100">Small throttle (100)</button>
+  <button data-set="500">Proposed throttle (500)</button>
+  <button id="trust" title="Ask the guard to put S4-P2 back in the circuit">Trust sensor S4-P2</button>
+</div>
+
+<div class="two">
+<section>
+<h2>How the decision runs</h2>
+<ol id="steps"></ol>
+</section>
+<section>
+<h2>Audit log (append-only)</h2>
+<ol class="log" id="log"></ol>
+<p class="note">Every proposal, guard result, key turn and bypass attempt is recorded, newest first.</p>
+</section>
+</div>
+</main>
+
+<script>
+// ---- the model: every number on the page comes from here ----
+const FLOOR = 40, R1 = 44, DEMAND = 2000, HOLD_END = 43.0, MAX = 500;
+const SLOPE = (HOLD_END - 29.0) / MAX;           // % points of R1 lost per m3/h throttled (29.0 at 500)
+const st = { t: 500, key: false };
+const calc = () => {
+  const proj = +(HOLD_END - st.t * SLOPE).toFixed(1);
+  const blocked = st.t > 0 && proj < FLOOR;
+  const status = blocked ? 'BLOCKED' : st.t === 0 ? 'NO PROPOSAL' : st.key ? 'APPROVED' : 'AWAITING OPERATOR';
+  return { proj, blocked, status, actual: status === 'APPROVED' ? st.t : 0, safeMax: (HOLD_END - FLOOR) / SLOPE };
+};
+
+// ---- geometry ----
+const LY0 = 110, LY1 = 330, Y = p => 400 - 3 * p;
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+const f1 = n => n.toFixed(1), fmt = n => n.toLocaleString('en-US');
+const NS = 'http://www.w3.org/2000/svg';
+const svg = $('#svg');
+
+$('#water').setAttribute('y', Y(R1)); $('#water').setAttribute('height', 400 - Y(R1));
+$('#r1Txt').setAttribute('y', Y(R1) - 6); $('#r1Txt').textContent = 'now ' + f1(R1) + '%';
+$('#floorLn').setAttribute('y1', Y(FLOOR)); $('#floorLn').setAttribute('y2', Y(FLOOR));
+for (let p = 0; p <= 100; p += 10) {
+  const l = document.createElementNS(NS, 'line');
+  l.setAttribute('x1', 822); l.setAttribute('x2', p % 20 ? 830 : 836); l.setAttribute('y1', Y(p)); l.setAttribute('y2', Y(p)); l.setAttribute('stroke', '#8d98a4');
+  $('#scale').append(l);
+  if (p % 20 === 0) { const t = document.createElementNS(NS, 'text'); t.setAttribute('x', 843); t.setAttribute('y', Y(p) + 4); t.setAttribute('class', 'sub'); t.textContent = p; $('#scale').append(t); }
+}
+// sensors: P1/P3 sag with the leak, P2 is flat
+[[880, 'P1', false], [925, 'P2', true], [970, 'P3', false]].forEach(([x, n, bad]) => {
+  const pts = bad ? `${x - 18},473 ${x + 18},473` : `${x - 18},464 ${x - 8},465 ${x},469 ${x + 8},471 ${x + 18},476`;
+  const cut = bad ? `<line x1="${x}" y1="482" x2="${x}" y2="491" stroke="#d0312d" stroke-width="2"/><line id="sblade" x1="${x}" y1="491" x2="${x + 9}" y2="502" stroke="#d0312d" stroke-width="2.5" style="transition:transform .25s;transform-origin:${x}px 491px"/><line x1="${x}" y1="503" x2="${x}" y2="515" stroke="#d0312d" stroke-width="2"/>`
+    : `<line x1="${x}" y1="482" x2="${x}" y2="515" stroke="#17814a" stroke-width="2"/>`;
+  const g = document.createElementNS(NS, 'g'); g.setAttribute('data-tip', bad ? 'badsensor' : 'sensor');
+  g.innerHTML = `<circle class="hl" cx="${x}" cy="440" r="9" fill="${bad ? '#fde8e7' : '#fff'}" stroke="${bad ? '#d0312d' : '#17814a'}" stroke-width="2.5"/>
+    ${bad ? `<text x="${x}" y="444" text-anchor="middle" class="sm" style="fill:#d0312d;font-weight:800">!</text>` : ''}
+    <line x1="${x}" y1="449" x2="${x}" y2="456" stroke="#566170"/>
+    <rect x="${x - 20}" y="456" width="40" height="26" rx="3" fill="#fff" stroke="${bad ? '#d0312d' : '#8d98a4'}"/>
+    <text x="${x - 17}" y="465" class="sub" style="font-size:9px">${n}</text>
+    <polyline points="${pts}" fill="none" stroke="${bad ? '#d0312d' : '#3a8fd1'}" stroke-width="2"/>${cut}`;
+  $('#sensors').append(g);
+});
+
+const TIPS = {
+  lever: () => `AI throttle lever. Pulling it only writes a proposal. It is not wired to any valve. Every m³/h you throttle costs ${SLOPE.toFixed(3)} points of R1.`,
+  gauge: () => `R1 level gauge. Solid water is now (${f1(R1)}%). The marker is the projected level after the proposed action. Holding output ends at ${f1(HOLD_END)}%; the full 500 m³/h throttle ends at ${f1(HOLD_END - MAX * SLOPE)}%.`,
+  floor: () => `Hard safety floor, ${FLOOR}%. It is a constant in code, not a prompt. The projected level is checked, not the current one, and it always beats tariff savings.`,
+  valve: () => `Throttle valve. Only the write contactor can move it. When the projection crosses the floor the valve is clamped and padlocked, even if the lever is pulled.`,
+  key: () => `Operator key switch. Nothing moves a valve unless a human turns it. It will not turn when the floor check fails, and changing the lever resets it.`,
+  contactor: () => `Write contactor. It closes only when the floor check passes and the key is on. This is the only path to the valve.`,
+  lamp1: () => `The gateway re-computes the projection itself. It ignores whatever the AI claims about safety.`,
+  lamp2: () => `Sensors are checked in code before any proposal: flatline, drift, impossible values, mass balance. Faulty ones are quarantined and logged.`,
+  lamp3: () => `Every valve or setpoint change waits for a human. A rejection or timeout means no action.`,
+  bloom: () => `The algal-bloom warning on the seawater intake tightens intake rules, so the plant cannot be relied on to refill R1 after a throttle.`,
+  plant: () => `Desalination plant. The tariff peaks at 14:00, so throttling looks cheap. The floor decides, not the price.`,
+  leak: () => `A real Sector 4 leak, starting 13:55. It is localized from the healthy sensors and flow imbalance, and is not confused with the faulty sensor.`,
+  sensor: () => `Healthy Sector 4 pressure sensor. Its pressure sags as the leak develops, so it stays in the circuit.`,
+  badsensor: () => `S4-P2 has drifted or flatlined. The guard cut it out of the circuit (quarantined and logged), so its readings never reach a decision.`,
+  guard: () => `Sensor guard, in Python. Runs before any schedule change is proposed. The AI cannot re-include a quarantined sensor.`,
+  bypass: () => `Press to simulate the AI trying to call the valve directly. It has no write handle, so nothing changes.`
+};
+const tipEl = $('#tip');
+const showTip = e => { const g = e.target.closest && e.target.closest('[data-tip]'); if (g) tipEl.textContent = TIPS[g.dataset.tip](); };
+svg.addEventListener('pointerover', showTip); svg.addEventListener('focusin', showTip);
+
+// ---- audit log ----
+const logItems = [];
+const log = msg => { logItems.unshift(msg); logItems.length = Math.min(logItems.length, 8); $('#log').innerHTML = logItems.map(m => `<li>${m}</li>`).join(''); };
+
+// ---- render: pure function of st ----
+function render() {
+  const c = calc(), y = LY0 + st.t / MAX * (LY1 - LY0);
+  $('#lever').setAttribute('transform', `translate(100,${y})`);
+  $('#leverTxt').textContent = st.t + ' m³/h';
+  const lv = $('#lever'); lv.setAttribute('aria-valuenow', st.t);
+  lv.setAttribute('aria-valuetext', `${st.t} cubic metres per hour, ${c.status.toLowerCase()}`);
+  const ty = LY0 + c.safeMax / MAX * (LY1 - LY0);
+  $('#safeTick').setAttribute('y1', ty); $('#safeTick').setAttribute('y2', ty);
+  $('#safeTxt').setAttribute('y', ty + 4); $('#safeTxt').textContent = 'locks > ' + Math.floor(c.safeMax);
+  $('#slipTxt').textContent = st.t ? `throttle ${st.t}` : 'no change';
+  // gauge
+  const lo = Math.min(R1, c.proj), hi = Math.max(R1, c.proj), gh = $('#ghost');
+  gh.setAttribute('y', Y(hi)); gh.setAttribute('height', Math.max(0, 3 * (hi - lo)));
+  gh.setAttribute('fill', c.blocked ? 'url(#hatchRed)' : 'url(#hatchAmb)');
+  $('#proj').setAttribute('transform', `translate(840,${Y(c.proj)})`);
+  const col = c.blocked ? '#d0312d' : '#17814a';
+  $('#projTri').setAttribute('fill', col); $('#projTxt').textContent = 'proj ' + f1(c.proj) + '%'; $('#projTxt').style.fill = col;
+  $('#floorLn').classList.toggle('pulse', c.blocked);
+  // lamps
+  $('#l1').setAttribute('fill', st.t === 0 ? '#fff' : c.blocked ? '#fde8e7' : '#e0f4e8');
+  $('#l1t').textContent = st.t === 0 ? 'nothing to check' : `proj ${f1(c.proj)}% ${c.blocked ? '<' : '≥'} ${FLOOR}% floor`;
+  $('#l3').setAttribute('fill', c.status === 'APPROVED' ? '#e0f4e8' : c.status === 'AWAITING OPERATOR' ? '#fff1cf' : '#fff');
+  $('#l3t').textContent = c.status === 'APPROVED' ? 'key turned' : c.status === 'AWAITING OPERATOR' ? 'waiting for the key' : c.blocked ? 'locked out' : 'not needed';
+  // key, contactor, cable
+  const kb = $('#keyBtn'); kb.setAttribute('aria-checked', st.key);
+  kb.setAttribute('aria-disabled', c.blocked || st.t === 0);
+  $('#keyrot').style.transform = `rotate(${st.key ? 45 : -45}deg)`;
+  $('#blade').style.transform = st.key ? 'rotate(0deg)' : 'rotate(-28deg)';
+  $('#cable').setAttribute('stroke', st.key ? '#17814a' : '#8d98a4'); $('#cable').classList.toggle('flow', st.key);
+  // valve
+  $('#wheel').style.transform = `rotate(${c.actual / MAX * 270}deg)`;
+  $('#gate').setAttribute('height', c.actual / MAX * 32);
+  $('#lock').style.display = c.blocked ? '' : 'none';
+  $('#valveTxt').textContent = `actual ${fmt(c.actual)} m³/h`;
+  $('#plantTxt').textContent = c.actual ? `throttled −${fmt(c.actual)} m³/h` : 'full output';
+  // readout
+  $('#oR1').textContent = f1(R1) + '%';
+  $('#oProj').textContent = f1(c.proj) + '%'; $('#oProj').className = c.blocked ? 'bad' : '';
+  const m = +(c.proj - FLOOR).toFixed(1); $('#oMargin').textContent = `${m >= 0 ? '+' : ''}${f1(m)} pts vs floor`;
+  $('#oFloor').textContent = FLOOR + '%';
+  $('#oThr').textContent = fmt(st.t); $('#oAct').textContent = `valve actual: ${fmt(c.actual)} m³/h`;
+  $('#status').textContent = c.status;
+  $('#oStatusCell').className = 'cell ' + (c.blocked ? 's-blocked' : c.status === 'APPROVED' ? 's-ok' : c.status === 'AWAITING OPERATOR' ? 's-await' : '');
+  $('#oWhy').textContent = c.blocked ? 'floor beats tariff savings' : c.status === 'AWAITING OPERATOR' ? 'only the key can move the valve' : c.status === 'APPROVED' ? 'operator approved this exact proposal' : 'valve unchanged';
+}
+
+// ---- interactions ----
+const clamp = v => Math.max(0, Math.min(MAX, v));
+function setT(v, commit) {
+  v = clamp(Math.round(v / 5) * 5);
+  if (v !== st.t) { st.t = v; st.key = false; }   // any change drops the approval
+  render();
+  if (commit) { const c = calc(); log(`AI proposes throttle ${st.t} m³/h → proj ${f1(c.proj)}% → guard: ${c.blocked ? '<b class="bad">BLOCKED</b>' : st.t ? 'pass, awaiting operator' : 'no action'}`); }
+}
+const svgY = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()).y; };
+const tFromY = y => (y - LY0) / (LY1 - LY0) * MAX;
+let drag = false;
+['#lever', '#slot'].forEach(s => $(s).addEventListener('pointerdown', e => {
+  drag = true; svg.setPointerCapture(e.pointerId); setT(tFromY(svgY(e))); e.preventDefault();
+}));
+svg.addEventListener('pointermove', e => { if (drag) setT(tFromY(svgY(e))); });
+const endDrag = () => { if (drag) { drag = false; setT(st.t, true); } };
+svg.addEventListener('pointerup', endDrag); svg.addEventListener('pointercancel', endDrag);
+$('#lever').addEventListener('keydown', e => {
+  const k = { ArrowDown: 5, ArrowRight: 5, ArrowUp: -5, ArrowLeft: -5, PageDown: 50, PageUp: -50 }[e.key];
+  if (k !== undefined) { e.preventDefault(); setT(st.t + k, true); }
+  else if (e.key === 'Home') { e.preventDefault(); setT(0, true); }
+  else if (e.key === 'End') { e.preventDefault(); setT(MAX, true); }
+});
+$$('[data-set]').forEach(b => b.addEventListener('click', () => setT(+b.dataset.set, true)));
+
+const shake = el => { el.classList.remove('shake'); void el.getBoundingClientRect(); el.classList.add('shake'); };
+function turnKey() {
+  const c = calc();
+  if (c.blocked) { shake($('#keyWrap')); log('Key refused: the gateway will not offer a proposal that breaches the floor.'); tipEl.textContent = 'The key will not turn: the floor check failed, so the gateway never offers this proposal to the operator.'; return; }
+  if (st.t === 0) { shake($('#keyWrap')); log('Key has nothing to approve: no proposal.'); return; }
+  st.key = !st.key; render();
+  log(st.key ? `Operator turned key → throttle ${st.t} m³/h <b>APPROVED</b>, valve moves` : 'Operator turned key off → valve returns to full output');
+}
+$('#keyBtn').addEventListener('click', turnKey);
+$('#keyBtn').addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); turnKey(); } });
+
+function bypass() {
+  const msg = $('#bypassMsg');
+  $('#bolt').animate([{ opacity: 1, transform: 'translateX(0)' }, { opacity: 1, transform: 'translateX(40px)', offset: .6 }, { opacity: 0, transform: 'translateX(10px)' }], { duration: 700 });
+  msg.setAttribute('opacity', 1); setTimeout(() => msg.setAttribute('opacity', 0), 2200);
+  shake($('#valve'));
+  log(`AI direct valve call → <b class="bad">REJECTED</b> (no write handle). Valve actual still ${fmt(calc().actual)} m³/h.`);
+}
+$('#bypass').addEventListener('click', bypass);
+$('#bypass').addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); bypass(); } });
+
+$('#trust').addEventListener('click', () => {
+  const sb = $('#sblade'); sb.style.transform = 'rotate(40deg)';
+  setTimeout(() => { sb.style.transform = ''; }, 500);
+  log('Request to re-include S4-P2 → <b class="bad">DENIED</b> by sensor guard. Still quarantined.');
+});
+
+// ---- explainer text, filled from the same constants ----
+$('#steps').innerHTML = `
+<li><b>Sensors first.</b> Code checks flatline, drift, impossible values and mass balance. S4-P2 trips, is cut out and logged. The leak is localized from the healthy sensors.</li>
+<li><b>AI proposes.</b> It sees tariffs (peak at 14:00) and the telemetry, and drafts a throttle. It can only fill in the proposal slip.</li>
+<li><b>Gateway re-checks.</b> Projected R1 = ${f1(HOLD_END)}% − throttle × ${SLOPE.toFixed(3)}. R1 starts at ${f1(R1)}% with demand ${fmt(DEMAND)} m³/h. At ${MAX} m³/h it ends at ${f1(HOLD_END - MAX * SLOPE)}%, below the ${FLOOR}% floor, so it is blocked. The largest throttle that passes is about ${Math.floor((HOLD_END - FLOOR) / SLOPE)} m³/h.</li>
+<li><b>Human key.</b> Even a passing proposal waits. No key, no valve movement. A reject or timeout means no action.</li>`;
+
+render();
+log('Page loaded: AI proposes throttle 500 m³/h → proj 29.0% → guard: <b class="bad">BLOCKED</b>');
+</script>
+</body>
+</html>

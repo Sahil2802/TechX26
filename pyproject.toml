@@ -1,0 +1,24 @@
+[project]
+name = "aquagrid"
+version = "0.1.0"
+description = "Water network orchestration agent (TechX Dubai 2026, Track 5)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "openai",
+    "python-dotenv",
+    "httpx",
+    "streamlit",
+    "pydantic>=2",
+]
+
+[dependency-groups]
+dev = ["pytest", "pytest-cov"]
+# wntr is an optional stretch goal: uv add wntr
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
