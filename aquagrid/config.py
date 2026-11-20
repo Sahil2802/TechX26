@@ -12,6 +12,10 @@ DEMO_NOW = "2026-11-20T14:00"  # simulated clock: tariff peak starts now
 RESERVE_FLOOR_PCT = 35.0
 BLOOM_RESERVE_MARGIN_PCT = 5.0  # effective floor 40% if bloom active OR intake untrusted
 RESERVOIR_MAX_PCT = 95.0
+
+# U-5.2: Civil Defence emergency fire reserve
+FIRE_RESERVE_M3 = 0.0           # 0 = no active request; set at runtime via app/cli
+FIRE_RESERVE_DURATION_H = 3     # protected for 3 hours (per curveball brief)
 MIN_SERVICE_PRESSURE_M = 15.0
 CHLORINE_MIN_MGL, CHLORINE_MAX_MGL = 0.2, 5.0
 TURBIDITY_MAX_NTU = 1.0

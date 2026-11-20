@@ -16,7 +16,7 @@ def throttle_levels(level_pct: float, demand: list[float], hours: list[int], max
 
 
 def _throttle_candidate(level_pct, demand, hours, max_m3h, floor_pct, capacity_m3) -> RejectedCandidate | None:
-    """The named 'peak throttle' candidate, generated here so the floor veto never depends on the LLM."""
+    """The named 'peak throttle' candidate. Floor includes bloom/intake margin + fire reserve (U-5.2)."""
     low = min(throttle_levels(level_pct, demand, hours, max_m3h, capacity_m3))
     if low >= floor_pct:
         return None

@@ -95,9 +95,60 @@ if c_run.button("Run agent", key="run", type="primary", width="stretch"):
 chain = [p for p in llm.available()] or ["none"]
 st.caption(f"{seed_data.SCENARIOS[scenario][1]}  ·  LLM chain with keys: {' → '.join(chain)} (Ollama is local, not probed)")
 
+# U-5.2: ensure fire_reserves table exists (idempotent migration for existing DBs)
+_mig_conn = db.connect()
+try:
+    db.migrate(_mig_conn)
+finally:
+    _mig_conn.close()
+
 snap = view.load_snapshot()
 pre, feeds = snap["pre"], snap["feeds"]
-floor_note = "35% base + 5% margin" if feeds.effective_floor_pct > config.RESERVE_FLOOR_PCT else "base minimum"
+
+# ---- U-5.2: Civil Defence fire reserve panel ------------------------------------------------
+with st.expander("🚒 Civil Defence emergency fire reserve (U-5.2)", expanded=feeds.fire_reserve_m3 > 0):
+    st.caption(
+        "A fire request locks this volume on top of the 35 % strategic reserve. "
+        "The scheduler veto and all guard arithmetic update immediately."
+    )
+    fd_col1, fd_col2, fd_col3 = st.columns([2, 1, 1])
+    fire_vol = fd_col1.number_input(
+        "Requested volume (m³)", min_value=0, max_value=10000, step=500,
+        value=int(feeds.fire_reserve_m3), key="fire_vol",
+        help="Civil Defence request. 0 = no active emergency."
+    )
+    fire_sector = fd_col2.selectbox("Sector / location", ["S6", "S1", "S2", "S3", "S4"], key="fire_sector",
+                                    index=["S6","S1","S2","S3","S4"].index(feeds.fire_reserve_sector)
+                                    if feeds.fire_reserve_sector in ["S6","S1","S2","S3","S4"] else 0)
+    if fd_col3.button("Apply request", key="fire_apply", type="primary", width="stretch"):
+        _fc = db.connect()
+        try:
+            db.set_fire_reserve(_fc, float(fire_vol), fire_sector, "Civil Defence",
+                                note=f"set via operator console")
+        finally:
+            _fc.close()
+        st.rerun()
+
+    if feeds.fire_reserve_m3 > 0:
+        fire_pct = feeds.fire_reserve_m3 / snap["reservoir"]["capacity_m3"] * 100
+        st.warning(
+            f"🚒 **Fire reserve ACTIVE** — {feeds.fire_reserve_m3:,.0f} m³ ({fire_pct:.1f}%) locked for "
+            f"Civil Defence (Sector {feeds.fire_reserve_sector}).  "
+            f"Effective floor raised to **{feeds.effective_floor_pct:.0f}%** "
+            f"(35% base + {feeds.effective_floor_pct - 35:.0f}% combined margin)."
+        )
+    else:
+        st.info("No active fire request. Enter a volume and click Apply request to simulate the curveball.")
+
+floor_note = f"{feeds.effective_floor_pct:.0f}% = 35% base"
+if feeds.effective_floor_pct > config.RESERVE_FLOOR_PCT:
+    extras = []
+    if feeds.bloom_active or not pre["intake_trusted"]:
+        extras.append("5% bloom/intake")
+    fire_pct_note = feeds.fire_reserve_m3 / snap["reservoir"]["capacity_m3"] * 100 if feeds.fire_reserve_m3 > 0 else 0
+    if fire_pct_note > 0:
+        extras.append(f"{fire_pct_note:.1f}% fire")
+    floor_note = "35% base + " + " + ".join(extras) if extras else f"{feeds.effective_floor_pct:.0f}%"
 
 m = st.columns(5)
 m[0].metric("Tariff band", feeds.current_band.upper(), f"{feeds.tariff[0]['aed_per_kwh']:.2f} AED/kWh", delta_color="off", delta_arrow="off")
@@ -152,8 +203,8 @@ with why:
     level, cap = snap["reservoir"]["level_pct"], snap["reservoir"]["capacity_m3"]
     for cand in s.rejected_candidates:
         st.error(f"**REJECTED BY GUARD:** {cand.name}\n\n{cand.reason}")
-    veto = view.reservoir_arithmetic(level, cap, config.THROTTLE_CANDIDATE_M3H, demand, feeds.effective_floor_pct)
-    hold = view.reservoir_arithmetic(level, cap, snap["plant"]["setpoint_m3h"], demand, feeds.effective_floor_pct)
+    veto = view.reservoir_arithmetic(level, cap, config.THROTTLE_CANDIDATE_M3H, demand, feeds.effective_floor_pct, feeds.fire_reserve_m3)
+    hold = view.reservoir_arithmetic(level, cap, snap["plant"]["setpoint_m3h"], demand, feeds.effective_floor_pct, feeds.fire_reserve_m3)
     st.caption(f"The arithmetic: throttle to {config.THROTTLE_CANDIDATE_M3H:.0f} m3/h")
     st.code("\n".join(veto["lines"]), language=None)
     st.caption(f"versus holding {snap['plant']['setpoint_m3h']:,.0f} m3/h")

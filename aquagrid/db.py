@@ -28,6 +28,15 @@ CREATE TABLE runs(run_id TEXT PRIMARY KEY, scenario TEXT, started_ts TEXT, statu
 CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, run_id TEXT, stage TEXT,
   actor TEXT, event TEXT, payload_json TEXT);
 CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS fire_reserves(
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  volume_m3 REAL NOT NULL DEFAULT 0,
+  sector TEXT NOT NULL DEFAULT 'S6',
+  requester TEXT NOT NULL DEFAULT 'Civil Defence',
+  requested_ts TEXT,
+  note TEXT
+);
+INSERT OR IGNORE INTO fire_reserves(id, volume_m3, sector, requester) VALUES(1, 0, 'S6', 'Civil Defence');
 """
 
 
@@ -67,6 +76,37 @@ def init_db() -> None:
         conn.executescript(SCHEMA_SQL)
     finally:
         conn.close()
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    """Apply schema additions to an existing database without destroying data (idempotent)."""
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS fire_reserves(
+          id INTEGER PRIMARY KEY CHECK(id=1),
+          volume_m3 REAL NOT NULL DEFAULT 0,
+          sector TEXT NOT NULL DEFAULT 'S6',
+          requester TEXT NOT NULL DEFAULT 'Civil Defence',
+          requested_ts TEXT,
+          note TEXT
+        );
+        INSERT OR IGNORE INTO fire_reserves(id, volume_m3, sector, requester)
+          VALUES(1, 0, 'S6', 'Civil Defence');
+    """)
+
+
+def get_fire_reserve(conn: sqlite3.Connection) -> dict:
+    """Return the current Civil Defence fire reserve row (always a single row)."""
+    return dict(conn.execute("SELECT * FROM fire_reserves WHERE id=1").fetchone())
+
+
+def set_fire_reserve(conn: sqlite3.Connection, volume_m3: float, sector: str,
+                     requester: str, note: str = "") -> None:
+    """Update the fire reserve request. Logs timestamp automatically."""
+    from datetime import datetime, timezone
+    conn.execute(
+        "UPDATE fire_reserves SET volume_m3=?, sector=?, requester=?, requested_ts=?, note=? WHERE id=1",
+        (volume_m3, sector, requester,
+         datetime.now(timezone.utc).isoformat(timespec="seconds"), note))
 
 
 def log_event(conn: sqlite3.Connection, run_id: str | None, stage: str,
