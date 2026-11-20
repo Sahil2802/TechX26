@@ -84,6 +84,12 @@ def load_state(conn: sqlite3.Connection, exclude_action_id: int | None = None) -
     pending = [valve_pipe[r["target_id"]] for r in conn.execute(
         "SELECT target_id FROM actions WHERE status='PENDING_APPROVAL' AND kind='valve_position' AND id IS NOT ?",
         (exclude_action_id,))]
+    # U-5.2: load fire reserve
+    try:
+        fire_row = db.get_fire_reserve(conn)
+        fire_reserve_m3 = float(fire_row["volume_m3"])
+    except Exception:
+        fire_reserve_m3 = 0.0
     return {
         "valves": {r["id"]: r["position_pct"] for r in conn.execute("SELECT id, position_pct FROM valves")},
         "valve_pipe": valve_pipe,
@@ -93,6 +99,7 @@ def load_state(conn: sqlite3.Connection, exclude_action_id: int | None = None) -
         "scenario": a["scenario"], "leak_findings": a["findings"], "intake_trusted": a["intake_trusted"],
         "bloom_active": a["bloom_active"], "demand_forecast": a["demand_forecast"], "cl_s4": a["cl_s4"],
         "pending_pipes": pending,
+        "fire_reserve_m3": fire_reserve_m3,  # U-5.2: passed to check_setpoint guard
     }
 
 
@@ -136,10 +143,18 @@ def read_tariff_and_quality_feeds() -> TariffQualityFeed:
         tariff = [dict(r) for r in conn.execute("SELECT hour, aed_per_kwh, band FROM tariff ORDER BY hour")]
         reservoir = dict(conn.execute("SELECT * FROM reservoir").fetchone())
         plant = dict(conn.execute("SELECT * FROM plant").fetchone())
+        # U-5.2: load Civil Defence fire reserve (table may not exist on legacy DBs)
+        try:
+            fire_row = db.get_fire_reserve(conn)
+            fire_reserve_m3 = float(fire_row["volume_m3"])
+            fire_reserve_sector = fire_row["sector"]
+        except Exception:
+            fire_reserve_m3, fire_reserve_sector = 0.0, "S6"
     finally:
         conn.close()
     now_hour = datetime.fromisoformat(config.DEMO_NOW).hour
-    floor = guards.effective_floor(a["bloom_active"], a["intake_trusted"])
+    floor = guards.effective_floor(a["bloom_active"], a["intake_trusted"],
+                                   fire_reserve_m3, reservoir["capacity_m3"])
     schedule = scheduler.build_schedule(
         reservoir["level_pct"], [a["demand_forecast"][h] for h in range(24)], [t["aed_per_kwh"] for t in tariff],
         plant, floor, reservoir["capacity_m3"], start_hour=now_hour)
@@ -151,4 +166,5 @@ def read_tariff_and_quality_feeds() -> TariffQualityFeed:
     return TariffQualityFeed(
         as_of=config.DEMO_NOW, current_band=tariff[now_hour]["band"], tariff=tariff[now_hour:],
         reservoir_level_pct=reservoir["level_pct"], bloom_active=a["bloom_active"], effective_floor_pct=floor,
+        fire_reserve_m3=fire_reserve_m3, fire_reserve_sector=fire_reserve_sector,
         alerts=alerts, intake_quality=_intake_quality(a), schedule=schedule)

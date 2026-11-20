@@ -73,7 +73,8 @@ def _per_hour(values: list[float]) -> str:
 
 
 def reservoir_arithmetic(level_pct: float, capacity_m3: float, production_m3h: float,
-                         demand_by_hour: dict[int, float], floor_pct: float) -> dict:
+                         demand_by_hour: dict[int, float], floor_pct: float,
+                         fire_reserve_m3: float = 0.0) -> dict:
     """The floor check as visible arithmetic, using the same projection as the guards."""
     hours = list(range(config.PEAK_START_H, config.PEAK_END_H))
     demand = [demand_by_hour[h] for h in hours]
@@ -82,8 +83,14 @@ def reservoir_arithmetic(level_pct: float, capacity_m3: float, production_m3h: f
     start_m3, end_m3 = level_pct * capacity_m3 / 100, levels[-1] * capacity_m3 / 100
     net_per_hour = production_m3h - statistics.fmean(demand)
     ok = low >= floor_pct
+    fire_pct = (fire_reserve_m3 / capacity_m3 * 100) if capacity_m3 > 0 else 0.0
     lines = [
         f"Start        {level_pct:.1f}% of {capacity_m3:,.0f} m3 = {start_m3:,.0f} m3",
+    ]
+    if fire_reserve_m3 > 0:
+        lines.append(
+            f"Fire reserve {fire_reserve_m3:,.0f} m3 ({fire_pct:.1f}%) committed to Civil Defence (Sector 6)")
+    lines += [
         f"Peak window  {config.PEAK_START_H:02d}:00-{config.PEAK_END_H:02d}:00 ({len(hours)} h): production "
         f"{production_m3h:,.0f} - demand {_per_hour(demand)} = {net_per_hour:+,.0f} m3/h",
         f"Net          {net_per_hour:+,.0f} x {len(hours)} h = {end_m3 - start_m3:+,.0f} m3",

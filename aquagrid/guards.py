@@ -101,10 +101,12 @@ def mass_balance(inlet_lps: float, expected_demand_lps: float) -> float:
     return inlet_lps - expected_demand_lps
 
 
-def effective_floor(bloom_active: bool, intake_trusted: bool) -> float:
-    """35% hard minimum, +5% while a bloom is active OR the intake sensor is not believed (fail-safe)."""
+def effective_floor(bloom_active: bool, intake_trusted: bool,
+                    fire_reserve_m3: float = 0.0, capacity_m3: float = 0.0) -> float:
+    """35% hard minimum, +5% for bloom/untrusted intake, +N% for Civil Defence fire reserve."""
     extra = config.BLOOM_RESERVE_MARGIN_PCT if bloom_active or not intake_trusted else 0.0
-    return config.RESERVE_FLOOR_PCT + extra
+    fire_pct = (fire_reserve_m3 / capacity_m3 * 100) if capacity_m3 > 0 else 0.0
+    return config.RESERVE_FLOOR_PCT + extra + fire_pct
 
 
 def project_reservoir(level_pct: float, production_m3h: list[float], demand_m3h: list[float],
@@ -242,9 +244,18 @@ def _project_peak(state: dict, production_m3h: float) -> list[float]:
 
 def check_setpoint(req: ActionRequest, state: dict) -> GuardReport:
     plant, value = state["plant"], req.target_value
-    floor = effective_floor(state["bloom_active"], state["intake_trusted"])
-    why = ("bloom active" if state["bloom_active"] else "intake sensor untrusted") if floor > config.RESERVE_FLOOR_PCT \
-        else "base reserve"
+    fire_reserve_m3 = state.get("fire_reserve_m3", 0.0)
+    capacity_m3 = state.get("reservoir", {}).get("capacity_m3", config.RESERVOIR_CAPACITY_M3)
+    floor = effective_floor(state["bloom_active"], state["intake_trusted"],
+                            fire_reserve_m3, capacity_m3)
+    why_parts = []
+    if state["bloom_active"]:
+        why_parts.append("bloom active")
+    if not state["intake_trusted"]:
+        why_parts.append("intake sensor untrusted")
+    if fire_reserve_m3 > 0:
+        why_parts.append(f"fire reserve {fire_reserve_m3:,.0f} m3")
+    why = ", ".join(why_parts) if why_parts else "base reserve"
     levels = _project_peak(state, value)
     low, high = min(levels), max(levels)
     risky = value > plant["setpoint_m3h"] and (state["bloom_active"] or not state["intake_trusted"])

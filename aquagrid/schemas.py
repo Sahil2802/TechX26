@@ -132,6 +132,8 @@ class TariffQualityFeed(BaseModel):
     reservoir_level_pct: float
     bloom_active: bool
     effective_floor_pct: float
+    fire_reserve_m3: float = 0.0        # U-5.2: Civil Defence emergency volume
+    fire_reserve_sector: str = "S6"     # which sector the fire is in
     alerts: list[dict]  # sanitized text + flags
     intake_quality: dict  # turbidity/chlorine health + trusted flag
     schedule: Schedule
