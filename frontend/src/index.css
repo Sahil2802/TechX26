@@ -70,3 +70,5 @@ iframe.mission { position: relative; width: 100%; height: 100%; border: 0; borde
   background: #b45309; color: #fffbeb; font-weight: 600; cursor: pointer; box-shadow: 0 6px 24px rgba(0,0,0,.35);
   display: flex; gap: 10px; align-items: center; }
 .popup button { background: none; border: 0; color: inherit; font-size: 20px; margin-left: auto; padding: 0 4px; }
+
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
