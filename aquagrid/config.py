@@ -75,5 +75,9 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
 OPERATOR_TOKEN = os.getenv("OPERATOR_TOKEN")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
+PLANT_A_TOKEN = os.getenv("PLANT_A_TOKEN")
+PLANT_B_TOKEN = os.getenv("PLANT_B_TOKEN")
+PLANTS = {"A": "Coastal Plant", "B": "Gulf Plant"}
 # Cloud first for tool-calling quality; Ollama last as the offline safety net. Providers without a key are skipped.
 LLM_CHAIN = os.getenv("LLM_CHAIN", "groq,gemini,ollama").split(",")

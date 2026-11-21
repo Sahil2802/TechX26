@@ -40,15 +40,37 @@ INSERT OR IGNORE INTO fire_reserves(id, volume_m3, sector, requester) VALUES(1, 
 """
 
 
+_plant = "A"
+
+
+def set_plant(plant: str) -> None:
+    global _plant
+    if plant not in config.PLANTS:
+        raise ValueError(f"unknown plant {plant!r}")
+    _plant = plant
+
+
+def current_plant() -> str:
+    return _plant
+
+
+def db_path(plant: str | None = None) -> str:
+    """Plant A -> config.DB_PATH; other plants -> plant_<x>.sqlite beside it."""
+    plant = plant or _plant
+    if plant == "A":
+        return config.DB_PATH
+    return str(Path(config.DB_PATH).with_name(f"plant_{plant.lower()}.sqlite"))
+
+
 def connect(ro: bool = False) -> sqlite3.Connection:
     """ro=True opens the file with mode=ro: any write raises OperationalError.
     Autocommit mode; use transaction() for atomic writes."""
     if ro:
-        uri = Path(config.DB_PATH).resolve().as_uri() + "?mode=ro"
+        uri = Path(db_path()).resolve().as_uri() + "?mode=ro"
         conn = sqlite3.connect(uri, uri=True, isolation_level=None)
     else:
-        Path(config.DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(config.DB_PATH, isolation_level=None)
+        Path(db_path()).parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(db_path(), isolation_level=None)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -66,12 +88,12 @@ def transaction(conn: sqlite3.Connection):
         conn.execute("COMMIT")
 
 
-def init_db() -> None:
+def init_db(plant: str | None = None) -> None:
     """Create a fresh database file with the full schema (drops any existing one)."""
-    path = Path(config.DB_PATH)
+    path = Path(db_path(plant))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.unlink(missing_ok=True)
-    conn = connect()
+    conn = sqlite3.connect(path, isolation_level=None)
     try:
         conn.executescript(SCHEMA_SQL)
     finally:
