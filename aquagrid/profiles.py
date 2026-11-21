@@ -10,6 +10,14 @@ class Profile:
     capacity_m3: float
     r1_start_pct: dict[str, float]
     scenarios: dict[str, tuple[str, str]]
+    leak_sector: str
+    loop_sector: str  # sector with the bypass loop (valves V-<sector>-a-b)
+    critical_node: str  # hospital junction, must stay supplied
+    chlorine_sensor: str
+    fire_sectors: tuple[str, ...]
+    intake_valve: str
+    plant_id: str
+    sectors: tuple[str, ...] = ("S1", "S2", "S3", "S4")
 
 
 _SCENARIOS = {
@@ -20,10 +28,13 @@ _SCENARIOS = {
 }
 _R1_START_PCT = {"baseline": 70.0, "peak_2pm": 44.0, "s4_drift": 60.0, "attack": 44.0}
 
+_STORY_A = dict(leak_sector="S4", loop_sector="S4", critical_node="J19", chlorine_sensor="CL-S4",
+                fire_sectors=("S6", "S1", "S2", "S3", "S4"), intake_valve="V-S4-IN", plant_id="PLANT-1")
+
 PROFILES: dict[str, Profile] = {
-    "A": Profile(config.PLANTS["A"], config.RESERVOIR_CAPACITY_M3, _R1_START_PCT, _SCENARIOS),
+    "A": Profile(config.PLANTS["A"], config.RESERVOIR_CAPACITY_M3, _R1_START_PCT, _SCENARIOS, **_STORY_A),
     # stage 1: same story as A, smaller reservoir
-    "B": Profile(config.PLANTS["B"], 18000.0, dict(_R1_START_PCT), dict(_SCENARIOS)),
+    "B": Profile(config.PLANTS["B"], 18000.0, dict(_R1_START_PCT), dict(_SCENARIOS), **_STORY_A),
 }
 
 

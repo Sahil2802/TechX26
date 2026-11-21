@@ -41,10 +41,13 @@ $('roiWin').textContent = pad2(D.peak[0]) + ':00–' + pad2(D.peak[1]) + ':00';
 
 // ---------- map ----------
 const map = $('map');
+const ST = D.story, SEC = [...ST.sectors.filter(x => x !== ST.loop_sector), ST.loop_sector]; // loop sector drawn last (bottom, with its bypass)
 const POS = { PLANT: [46, 170], R1: [140, 170] };
 const rowY = [50, 120, 190];
-for (let n = 1; n <= 15; n++) POS['J' + pad2(n)] = [300 + ((n - 1) % 5) * 58, rowY[Math.floor((n - 1) / 5)]];
-Object.assign(POS, { J16: [300, 290], J17: [358, 290], J18: [416, 290], J19: [474, 290], J20: [387, 355] });
+for (let n = 1; n <= 20; n++) {
+  const k = (n - 1) % 5, slot = SEC.indexOf('S' + (Math.floor((n - 1) / 5) + 1));
+  POS['J' + pad2(n)] = slot < 3 ? [300 + k * 58, rowY[slot]] : k < 4 ? [300 + k * 58, 290] : [387, 355];
+}
 const sectorOfJ = id => 'S' + (Math.floor((parseInt(id.slice(1), 10) - 1) / 5) + 1);
 const gPipes = s('g', {}, map), gNodes = s('g', {}, map), gTags = s('g', {}, map);
 const pipeEls = {}, nodeEls = {};
@@ -63,7 +66,7 @@ for (const p of D.pipes) {
 }
 s('path', { class: 'pipe', d: 'M78 170H115' }, gPipes); s('path', { class: 'flow', d: 'M78 170H115', style: '--spd:1.2s' }, gPipes);
 s('rect', { x: 14, y: 152, width: 64, height: 36, fill: 'none', stroke: 'var(--info)', 'stroke-width': 1.5 }, gNodes);
-s('text', { x: 46, y: 168, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': 9 }, gNodes, 'PLANT-1');
+s('text', { x: 46, y: 168, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': 9 }, gNodes, ST.plant_id);
 const plantTxt = s('text', { x: 46, y: 181, 'text-anchor': 'middle', fill: 'var(--mut)', 'font-size': 9 }, gNodes, '');
 s('rect', { x: 115, y: 135, width: 50, height: 70, fill: 'var(--bg)', stroke: 'var(--info)', 'stroke-width': 1.5 }, gNodes);
 const tank = s('rect', { x: 117, y: 190, width: 46, height: 13, fill: 'var(--ok-d)' }, gNodes);
@@ -71,17 +74,17 @@ const floorLn = s('line', { x1: 112, x2: 168, y1: 170, y2: 170, stroke: 'var(--w
 s('text', { x: 140, y: 124, 'text-anchor': 'middle', fill: 'var(--ink)', 'font-size': 10, 'font-weight': 600 }, gNodes, 'R1');
 const tankTxt = s('text', { x: 140, y: 218, 'text-anchor': 'middle', fill: 'var(--mut)', 'font-size': 9 }, gNodes, '');
 const flowTxt = {}, secLbl = {};
-['S1', 'S2', 'S3', 'S4'].forEach((sec, i) => {
+SEC.forEach((sec, i) => {
   const y = i < 3 ? rowY[i] : 290, x = 560;
   secLbl[sec] = s('text', { class: 'slbl', x, y: y - 3 }, gNodes, sec);
   flowTxt[sec] = s('text', { class: 'ftag', x, y: y + 10 }, gNodes, '');
 });
 for (let n = 1; n <= 20; n++) {
-  const id = 'J' + pad2(n), [x, y] = POS[id], hosp = id === 'J19', g = s('g', {}, gNodes);
+  const id = 'J' + pad2(n), [x, y] = POS[id], hosp = id === ST.critical_node, g = s('g', {}, gNodes);
   const ping = s('circle', { class: 'ping', cx: x, cy: y, r: 8, style: 'display:none' }, g);
   const node = hosp ? s('rect', { class: 'node hosp', x: x - 9, y: y - 9, width: 18, height: 18 }, g) : s('circle', { class: 'node', cx: x, cy: y, r: 7 }, g);
   if (hosp) s('text', { x, y: y + 4, 'text-anchor': 'middle', fill: 'var(--info)', 'font-size': 13, 'font-weight': 700 }, g, '+');
-  s('text', { class: 'nlbl', x, y: y + (hosp ? 22 : 19) }, g, hosp ? 'J19 HOSPITAL' : id);
+  s('text', { class: 'nlbl', x, y: y + (hosp ? 22 : 19) }, g, hosp ? id + ' HOSPITAL' : id);
   nodeEls[id] = { node, ping };
 }
 
@@ -99,7 +102,7 @@ function updateMap(m) {
     n.node.classList.toggle('leak', leak); n.node.classList.toggle('bad', bad && !leak);
     n.ping.style.display = leak && !reduce ? '' : 'none';
   }
-  for (const sec of ['S1', 'S2', 'S3', 'S4']) {
+  for (const sec of SEC) {
     const f = fr.sectors[sec];
     flowTxt[sec].textContent = 'F-' + sec + ' ' + val('F-' + sec, m).toFixed(0) + ' L/s' + (f.v === 'GENUINE_LEAK' ? ' ◆' : f.v === 'SENSOR_FAULT' ? ' ▲' : '');
     secLbl[sec].style.fill = f.v === 'GENUINE_LEAK' ? 'var(--alarm-t)' : f.v === 'SENSOR_FAULT' ? 'var(--warn)' : '';
@@ -109,7 +112,7 @@ function updateMap(m) {
   floorLn.setAttribute('y1', fy); floorLn.setAttribute('y2', fy);
   tankTxt.textContent = lvl.toFixed(1) + '% · floor ' + fr.floor.toFixed(0) + '%';
   plantTxt.textContent = (val('F-PLANT', m) * 3.6).toFixed(0) + ' m³/h';
-  $('mapSub').textContent = 'J19 hospital: ' + (D.valves['V-S4-IN'] === 0 ? 'CUT OFF' : 'supplied');
+  $('mapSub').textContent = ST.critical_node + ' hospital: ' + (D.valves[ST.intake_valve] === 0 ? 'CUT OFF' : 'supplied');
   gTags.replaceChildren();
   const ids = [...new Set([...fr.leak, ...Object.keys(fr.bad)])].filter(id => id.startsWith('P-J'));
   ids.forEach((sid, i) => {
@@ -125,7 +128,7 @@ function updateMap(m) {
 }
 
 // ---------- radar ----------
-const GROUPS = ['S1', 'S2', 'S3', 'S4', 'SYS'], WEDGE = Math.PI * 2 / 5;
+const GROUPS = [...ST.sectors, 'SYS'], WEDGE = Math.PI * 2 / 5;
 const blips = [];
 GROUPS.forEach((g, gi) => {
   const list = D.specs.filter(x => (x.sector || 'SYS') === g);
@@ -217,7 +220,7 @@ function minuteLines(mm, anim) {
   }
   for (const e of evBy[mm] || []) addLine(e.ts, e.actor, e.level, '[' + e.tag + '] ' + e.text, anim);
   const bad = Object.keys(fr.bad).length;
-  addLine(t, 'CODE', 'sys', 'poll ' + (D.specs.length - bad) + '/' + D.specs.length + ' · R1 ' + fr.level.toFixed(1) + '% · floor ' + fr.floor.toFixed(1) + '% · S4 Δ' + fr.sectors.S4.resid + ' L/s', anim);
+  addLine(t, 'CODE', 'sys', 'poll ' + (D.specs.length - bad) + '/' + D.specs.length + ' · R1 ' + fr.level.toFixed(1) + '% · floor ' + fr.floor.toFixed(1) + '% · ' + ST.leak_sector + ' Δ' + fr.sectors[ST.leak_sector].resid + ' L/s', anim);
   if (mm === L) {
     if (run.length) for (const r of run) {
       const sec = r.Who === 'ATTACKER' || /BLOCKED|REJECTED/.test(r.Step);
@@ -246,7 +249,7 @@ rrow('blocked', 'Blocked by the floor', 'blocked_kwh', 'safety beat tariff savin
 rrow('', 'Peak cost avoided', 'aed_saved', 'banked kWh x peak tariff (AED/kWh)', ' AED');
 const bar = h('div', 'bar', null, roiEl), mk = {};
 for (const [k, c] of [['fl', 'fl'], ['th', 'th'], ['pl', 'pl']]) mk[k] = Object.assign(h('i', c, null, bar), {});
-const leakRow = h('div', 'rrow', null, roiEl); h('span', null, 'S4 leak waste', leakRow); const leakB = h('b', null, '', leakRow);
+const leakRow = h('div', 'rrow', null, roiEl); h('span', null, ST.leak_sector + ' leak waste', leakRow); const leakB = h('b', null, '', leakRow);
 const spark = s('svg', { id: 'roispark', viewBox: '0 0 300 62', preserveAspectRatio: 'none' }); roiEl.appendChild(spark);
 const sMax = Math.max(...D.frames.map(f => Math.max(f.roi.opportunity_kwh, f.roi.banked_kwh))) * 1.08 || 1;
 const sx = m => (m - F) / (L - F) * 300, sy = v => 58 - v / sMax * 54;

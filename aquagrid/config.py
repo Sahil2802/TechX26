@@ -19,7 +19,6 @@ FIRE_RESERVE_DURATION_H = 3     # protected for 3 hours (per curveball brief)
 MIN_SERVICE_PRESSURE_M = 15.0
 CHLORINE_MIN_MGL, CHLORINE_MAX_MGL = 0.2, 5.0
 TURBIDITY_MAX_NTU = 1.0
-CRITICAL_NODES = ["J19"]  # hospital junction, must stay supplied
 
 # Sensor checks
 VALID_RANGE = {

@@ -15,10 +15,9 @@ from fastapi.responses import HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from aquagrid import agent, config, db, gateway, live, llm, seed_data, view
+from aquagrid import agent, config, db, gateway, live, llm, profiles, seed_data, view
 
 DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
-FIRE_SECTORS = ["S6", "S1", "S2", "S3", "S4"]
 
 app = FastAPI(title="AquaGrid Operator Console")
 _last_run: dict[str, dict | None] = {}  # keyed by plant. ponytail: single-operator demo state; per-session store if multi-user
@@ -168,7 +167,7 @@ def state(x_operator_token: str | None = Header(default=None), token: str | None
         "scenarios": {k: {"name": v[0], "blurb": v[1]} for k, v in seed_data.SCENARIOS.items()},
         "demo_now": config.DEMO_NOW, "operator_token_required": _tokens_configured(),
         "plant": db.current_plant(), "plants": _plants_json(allowed), "role": role,
-        "llm_chain": llm.available(), "fire_sectors": FIRE_SECTORS,
+        "llm_chain": llm.available(), "fire_sectors": list(profiles.get().fire_sectors),
         "metrics": {"band": feeds.current_band, "aed_per_kwh": feeds.tariff[0]["aed_per_kwh"],
                     "level_pct": feeds.reservoir_level_pct, "capacity_m3": cap,
                     "floor_pct": feeds.effective_floor_pct, "base_floor_pct": config.RESERVE_FLOOR_PCT,
@@ -301,7 +300,7 @@ def run_agent(body: RunBody) -> dict:
 
 @api.post("/api/fire", dependencies=WRITE)
 def set_fire(body: FireBody) -> dict:
-    if body.sector not in FIRE_SECTORS:
+    if body.sector not in profiles.get().fire_sectors:
         raise HTTPException(422, "unknown sector")
     _ensure_db()
     conn = db.connect()

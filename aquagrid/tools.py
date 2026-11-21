@@ -7,11 +7,8 @@ import json
 import sqlite3
 from datetime import datetime
 
-from aquagrid import config, db, guards, scheduler
+from aquagrid import config, db, guards, profiles, scheduler
 from aquagrid.schemas import NetworkTelemetry, SensorSpec, TariffQualityFeed
-
-SECTORS = ("S1", "S2", "S3", "S4")
-
 
 def _scenario(conn: sqlite3.Connection) -> str:
     row = conn.execute("SELECT value FROM meta WHERE key='scenario'").fetchone()
@@ -52,7 +49,7 @@ def analyze(conn: sqlite3.Connection, now: str | None = None, scenario: str | No
     expected = {r[0]: r[1] for r in conn.execute("SELECT sector, sum(base_demand_lps) FROM junctions GROUP BY sector")}
     valve_of = {r["id"]: r["valve_id"] for r in conn.execute("SELECT id, valve_id FROM pipes WHERE valve_id IS NOT NULL")}
     findings = []
-    for sector in SECTORS:
+    for sector in profiles.get().sectors:
         finding, updated = guards.classify_sector(
             sector, [s for s in specs if s.sector == sector], series, health, expected[sector])
         findings.append(finding.model_copy(update={"suspected_valve": valve_of.get(finding.suspected_pipe)}))
@@ -60,7 +57,8 @@ def analyze(conn: sqlite3.Connection, now: str | None = None, scenario: str | No
     alerts = [dict(r) for r in conn.execute(
         "SELECT ts, source, kind, severity, message FROM quality_alerts WHERE scenario=? AND ts<=? ORDER BY ts",
         (scenario, now))]
-    chlorine = series["CL-S4"][-1] if not health["CL-S4"].quarantined else None
+    cl_id = profiles.get().chlorine_sensor
+    chlorine = series[cl_id][-1] if not health[cl_id].quarantined else None
     return {
         "scenario": scenario, "specs": specs, "series": series, "health": health, "findings": findings,
         "intake_trusted": not (health["T-INTAKE"].quarantined or health["CL-INTAKE"].quarantined),
@@ -108,8 +106,9 @@ def load_state(conn: sqlite3.Connection, exclude_action_id: int | None = None) -
 
 
 def read_network_telemetry(sector: str | None = None, window_min: int = 30) -> NetworkTelemetry:
-    if sector is not None and sector not in SECTORS:
-        raise ValueError(f"sector must be one of {SECTORS} or omitted")
+    sectors = profiles.get().sectors
+    if sector is not None and sector not in sectors:
+        raise ValueError(f"sector must be one of {sectors} or omitted")
     if not 5 <= window_min <= 120:
         raise ValueError("window_min must be between 5 and 120")
     conn = db.connect(ro=True)

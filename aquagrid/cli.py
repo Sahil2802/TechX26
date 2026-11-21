@@ -108,7 +108,7 @@ def cmd_llm_check(args: argparse.Namespace) -> None:
     try:
         messages = [{"role": "system", "content": agent.SYSTEM_PROMPT},
                     {"role": "user", "content": "Scenario peak_2pm. Analyse the network and advise the operator."}]
-        msg, who = llm.chat(messages, agent.TOOL_SPECS)
+        msg, who = llm.chat(messages, agent.tool_specs())
     except llm.AllProvidersFailed as e:
         raise SystemExit(f"FAILED: {e}")
     finally:

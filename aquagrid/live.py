@@ -8,7 +8,7 @@ import statistics
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from aquagrid import config, db, guards, scheduler, seed_data, tools
+from aquagrid import config, db, guards, profiles, scheduler, seed_data, tools
 
 ASSETS = Path(__file__).parent / "mission"
 FRAME_START = 15  # first replayed minute (12:15): enough samples for the flatline/drift windows
@@ -59,8 +59,8 @@ def _frame(conn, scenario: str, m: int, ctx: dict) -> dict:
     a = tools.analyze(conn, now=ts(m), scenario=scenario)
     floor = guards.effective_floor(a["bloom_active"], a["intake_trusted"], ctx["fire_m3"], ctx["capacity"])
     level = a["series"]["L-R1"][-1]
-    s4 = next(f for f in a["findings"] if f.sector == "S4")
-    loss = s4.mass_balance_residual_lps if s4.verdict == "GENUINE_LEAK" else 0.0
+    leaky = next(f for f in a["findings"] if f.sector == profiles.get().leak_sector)
+    loss = leaky.mass_balance_residual_lps if leaky.verdict == "GENUINE_LEAK" else 0.0
     leak_ids = [i for f in a["findings"] for i in _leak_sensors(f, a["series"], a["health"], a["specs"])]
     return {
         "m": m, "level": round(level, 2), "floor": floor, "bloom": a["bloom_active"], "trusted": a["intake_trusted"],
@@ -149,6 +149,7 @@ def _alert_events(alerts: list[dict]) -> list[dict]:
 
 def build_timeline(scenario: str, run_rows: list[dict] | None = None) -> dict:
     """Everything the Mission Control screen replays for one scenario (read-only DB)."""
+    prof = profiles.get()
     conn = db.connect(ro=True)
     try:
         specs = tools._specs(conn)
@@ -178,6 +179,8 @@ def build_timeline(scenario: str, run_rows: list[dict] | None = None) -> dict:
         "frames": frames, "events": sorted(events, key=lambda e: e["m"]),
         "alerts": alerts, "pipes": pipes, "valves": valves,
         "run": run_rows or [], "base_floor": config.RESERVE_FLOOR_PCT,
+        "story": {"sectors": list(prof.sectors), "leak_sector": prof.leak_sector, "loop_sector": prof.loop_sector,
+                  "critical_node": prof.critical_node, "intake_valve": prof.intake_valve, "plant_id": prof.plant_id},
         "peak": [config.PEAK_START_H, config.PEAK_END_H],
     }
 

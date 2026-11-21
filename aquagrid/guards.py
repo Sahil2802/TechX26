@@ -4,7 +4,7 @@ import statistics
 from collections import deque
 from datetime import datetime
 
-from aquagrid import config
+from aquagrid import config, profiles
 from aquagrid.schemas import ActionRequest, Check, GuardReport, LeakFinding, SensorHealth, SensorSpec
 
 REDACTION = "[REDACTED: instruction-like text]"
@@ -138,7 +138,7 @@ def reachable_nodes(pipes: list[dict], closed_pipe_ids: set[str], source: str = 
 def connectivity_ok(pipes: list[dict], closed_pipe_ids: set[str], source: str = "R1",
                     critical: list[str] | None = None) -> tuple[bool, list[str]]:
     """Returns (all critical nodes supplied, unreachable ones)."""
-    critical = config.CRITICAL_NODES if critical is None else critical
+    critical = [profiles.get().critical_node] if critical is None else critical
     seen = reachable_nodes(pipes, closed_pipe_ids, source)
     unreachable = sorted(n for n in critical if n not in seen)
     return not unreachable, unreachable
@@ -266,6 +266,7 @@ def check_setpoint(req: ActionRequest, state: dict) -> GuardReport:
     low, high = min(levels), max(levels)
     risky = value > plant["setpoint_m3h"] and (state["bloom_active"] or not state["intake_trusted"])
     chlorine = state.get("cl_s4")
+    cl_id = profiles.get().chlorine_sensor
     chlorine_ok = chlorine is None or config.CHLORINE_MIN_MGL <= chlorine <= config.CHLORINE_MAX_MGL
     return _report([
         _check("bounds", plant["min_m3h"] <= value <= plant["max_m3h"],
@@ -279,7 +280,7 @@ def check_setpoint(req: ActionRequest, state: dict) -> GuardReport:
                "intake not increased while a bloom is active or intake quality is untrusted" if not risky
                else "refusing to raise intake while a bloom is active or intake quality is untrusted"),
         _check("chlorine", chlorine_ok,
-               "CL-S4 chlorine in range" if chlorine_ok else f"CL-S4 chlorine {chlorine} mg/L out of range", chlorine),
+               f"{cl_id} chlorine in range" if chlorine_ok else f"{cl_id} chlorine {chlorine} mg/L out of range", chlorine),
     ])
 
 
