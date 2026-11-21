@@ -18,6 +18,7 @@ FIRE_RESERVE_M3 = 0.0           # 0 = no active request; set at runtime via app/
 FIRE_RESERVE_DURATION_H = 3     # protected for 3 hours (per curveball brief)
 MIN_SERVICE_PRESSURE_M = 15.0
 CHLORINE_MIN_MGL, CHLORINE_MAX_MGL = 0.2, 5.0
+APPROVAL_TOKEN_EXPIRY_MIN = 15  # U-5.4: single-use token validity window
 TURBIDITY_MAX_NTU = 1.0
 CRITICAL_NODES = ["J19"]  # hospital junction, must stay supplied
 

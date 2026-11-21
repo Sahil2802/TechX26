@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from './api'
 import { ApprovalGate, RunPanel } from './Gate'
-import { Findings, MetricCards, ScheduleSection, SensorsPanel } from './Panels'
+import { CurveballShowcase, Findings, MetricCards, ScheduleSection, SensorsPanel } from './Panels'
 import { ApprovalPopup } from './Popup'
 import type { DecideResult, State, Verb } from './types'
 
@@ -117,6 +117,11 @@ export default function App() {
       </div>
 
       <ApprovalPopup ids={pending.map((a) => a.id)} onOpen={() => setTab('action')} />
+      {state.curveballs?.scada?.stale && (
+        <div className="alert a-error" role="alert">
+          ⚠️ <b>SCADA TELEMETRY LOSS ACTIVE (&gt;10 min quiet):</b> All setpoint and valve proposals are BLOCKED by Python guards. Tariff optimization is paused, and the network is held at safe baseline production (1,900 m³/h).
+        </div>
+      )}
       {pending.length > 0 && (
         <div className="alert a-warning" role="status">
           🔔 <b>{pending.length} action(s) need your decision.</b> Open the <b>Action required</b> tab: nothing moves until you approve.
@@ -141,6 +146,8 @@ export default function App() {
       </div>
 
       <div hidden={tab !== 'classic'}>
+      <CurveballShowcase state={state} disabled={busy} onRefresh={refresh} toast={toast} />
+
       <details open={fireActive}>
         <summary>🚒 Civil Defence emergency fire reserve (U-5.2)</summary>
         <p className="mut">A fire request locks this volume on top of the 35 % strategic reserve. The scheduler veto and all guard arithmetic update immediately.</p>
@@ -161,7 +168,7 @@ export default function App() {
           : <div className="alert a-info">No active fire request. Enter a volume and Apply to simulate the curveball.</div>}
       </details>
 
-      <MetricCards m={state.metrics} fireM3={state.fire.volume_m3} />
+      <MetricCards m={state.metrics} fireM3={state.fire.volume_m3} cb={state.curveballs} />
 
       <div className="cols">
         <section><h2>Network &amp; sensors</h2><SensorsPanel sensors={state.sensors} valves={state.valves} /></section>
@@ -176,7 +183,8 @@ export default function App() {
       <h2>Human approval gate</h2>
       <ApprovalGate actions={state.actions} disabled={busy}
         demoLeak={state.demo_leak} onStageDemo={() => act(api.stageDemo)}
-        onDecide={(id, verb: Verb, operator, note) => act(() => api.decide(id, verb, operator, note))} />
+        onStageIsolationFlush={() => act(api.stageIsolationFlush)}
+        onDecide={(id, verb: Verb, operator, note, tok) => act(() => api.decide(id, verb, operator, note, tok))} />
       </div>
 
       <h2>Agent briefing and decision trace</h2>
