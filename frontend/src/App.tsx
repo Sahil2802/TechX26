@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from './api'
-import { CurveballDemoTheatre } from './CurveballDemo'
 import { ApprovalGate, RunPanel } from './Gate'
 import { CurveballShowcase, Findings, MetricCards, ScheduleSection, SensorsPanel } from './Panels'
 import { ApprovalPopup } from './Popup'
 import type { DecideResult, State, Verb } from './types'
 
 interface Toast { id: number; kind: DecideResult['kind']; text: string }
-type Tab = 'curveball' | 'mission' | 'classic' | 'action'
+type Tab = 'mission' | 'classic' | 'action'
 
 export default function App() {
   const [state, setState] = useState<State | null>(null)
@@ -17,7 +16,7 @@ export default function App() {
   const [fireSector, setFireSector] = useState('S6')
   const [busy, setBusy] = useState(false)
   const [token, setToken] = useState('') // kept in memory only; sent as X-Operator-Token on every write
-  const [tab, setTab] = useState<Tab>('curveball')
+  const [tab, setTab] = useState<Tab>('mission')
   const [toasts, setToasts] = useState<Toast[]>([])
   const toastId = useRef(0)
   const missionFrame = useRef<HTMLIFrameElement>(null)
@@ -77,7 +76,6 @@ export default function App() {
   const firePct = (state.fire.volume_m3 / state.metrics.capacity_m3) * 100
   const pending = state.actions.filter((a) => a.status === 'PENDING_APPROVAL')
   const tabs: [Tab, string][] = [
-    ['curveball', '🎯 Curveball Demo'],
     ['mission', 'Mission Control'],
     ['classic', 'Classic console'],
     ['action', pending.length ? `🔔 Action required (${pending.length})` : 'Action required'],
@@ -133,11 +131,6 @@ export default function App() {
         {tabs.map(([id, label]) => (
           <button key={id} role="tab" className="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
         ))}
-      </div>
-
-      {/* ── Curveball Demo Theatre ─────────────────────────── */}
-      <div hidden={tab !== 'curveball'}>
-        <CurveballDemoTheatre state={state} onRefresh={refresh} />
       </div>
 
       {/* All three tabs stay mounted and are only hidden, so the Mission Control replay and the

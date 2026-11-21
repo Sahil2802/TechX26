@@ -6,6 +6,7 @@ const $ = id => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const F = D.first, L = D.last, N = D.times.length;
+let updateCurveball = null;
 const frameAt = m => D.frames[Math.max(F, Math.min(L, m)) - F];
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const pad2 = n => String(n).padStart(2, '0');
@@ -348,6 +349,7 @@ function setRate(k) { rate = k; document.querySelectorAll('[data-k]').forEach(b 
 function seek(v, jumped) { t = Math.max(0, Math.min(L, v)); if (jumped) jumpFlag = true; if (t < L && !playing && !jumped) { } }
 function onMinute(m) {
   updateBanner(m); updateMap(m); setRadar(m); updateAlarms(m); updateMatrix(m); updateRoi(m); syncConsole(m, jumpFlag); jumpFlag = false;
+  if (updateCurveball) updateCurveball(m);
   rng.value = m; $('playhead').style.left = (Math.max(t, 0) / (N - 1) * 100) + '%';
 }
 function frame(now) {
@@ -376,4 +378,73 @@ addEventListener('keydown', e => {
 });
 setRate(4); setPlaying(playing);
 requestAnimationFrame(frame);
+
+// ---------- curveball story panel ----------
+if (D.curveball) {
+  const cb = D.curveball;
+  const cbPanel = document.querySelector('.low');
+  // Expand to 4-column section to include the curveball panel
+  cbPanel.style.gridTemplateColumns = 'minmax(0,1.1fr) minmax(0,1.25fr) minmax(0,.9fr) minmax(0,1.3fr)';
+
+  const pn = h('section', 'pn', null, cbPanel);
+  const ph2 = h('h2', null, null, pn);
+  const badge = h('span', null, cb.id, ph2);
+  badge.style.cssText = `background:${cb.color}22;color:${cb.color};border:1px solid ${cb.color}66;border-radius:3px;padding:1px 7px;margin-right:6px;font-size:10px`;
+  ph2.append(cb.title);
+
+  const body = h('div', 'cbody', null, pn);
+
+  const steps = [
+    { key: 'what',    minute: cb.trigger_minute,     actor: 'EVENT',    color: '#f0564f', label: 'WHAT HAPPENED',  text: cb.what_happened },
+    { key: 'guard',   minute: cb.trigger_minute,     actor: 'CODE',     color: '#34d399', label: 'GUARD FIRED',    text: cb.guard_fired },
+    { key: 'agent',   minute: cb.trigger_minute + 1, actor: 'AGENT',    color: '#a855f7', label: 'AGENT RESPONSE', text: cb.agent_proposed },
+    { key: 'resolve', minute: cb.trigger_minute + 2, actor: 'HUMAN',    color: '#f2a93b', label: 'RESOLUTION',     text: cb.resolution },
+  ];
+
+  const stepEls = {};
+  for (const st of steps) {
+    const wrap = h('div', 'cbstep', null, body);
+    wrap.style.cssText = `border-left:3px solid ${st.color}44;padding:6px 8px;margin-bottom:6px;transition:border-color .4s,background .4s;border-radius:0 4px 4px 0`;
+    const hd = h('div', 'cbhd', null, wrap);
+    hd.style.cssText = `display:flex;gap:6px;align-items:center;margin-bottom:3px`;
+    const actBadge = h('span', null, st.actor, hd);
+    actBadge.style.cssText = `background:${st.color}22;color:${st.color};font:600 9px var(--mono);padding:1px 6px;border-radius:2px;border:1px solid ${st.color}44`;
+    h('span', null, st.label, hd).style.cssText = `font:600 10px var(--mono);color:var(--mut);letter-spacing:.08em`;
+    const txt = h('div', null, st.text, wrap);
+    txt.style.cssText = `font:11.5px/1.55 var(--sans);color:var(--dim);transition:color .4s`;
+    stepEls[st.key] = { wrap, txt, st };
+  }
+
+  // Architecture row
+  const arch = h('div', null, null, body);
+  arch.style.cssText = `margin-top:8px;padding:6px 8px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;font:10px var(--mono);color:var(--dim)`;
+  arch.textContent = cb.architecture;
+
+  // Progress bar
+  const progWrap = h('div', null, null, body);
+  progWrap.style.cssText = `margin-top:6px`;
+  const progLabel = h('div', null, '', progWrap);
+  progLabel.style.cssText = `font:10px var(--mono);color:var(--dim);margin-bottom:3px`;
+  const progTrack = h('div', null, null, progWrap);
+  progTrack.style.cssText = `height:4px;background:var(--line);border-radius:2px;overflow:hidden`;
+  const progBar = h('div', null, null, progTrack);
+  progBar.style.cssText = `height:100%;width:0%;background:${cb.color};transition:width .3s;border-radius:2px`;
+
+  updateCurveball = function(m) {
+    const triggered = m >= cb.trigger_minute;
+    const phase = m - cb.trigger_minute; // -ve = not yet, 0 = what/guard, 1 = agent, 2+ = resolve
+    for (const [key, { wrap, txt, st }] of Object.entries(stepEls)) {
+      const active = m >= st.minute;
+      wrap.style.borderColor = active ? st.color : st.color + '33';
+      wrap.style.background = active ? st.color + '0d' : 'transparent';
+      txt.style.color = active ? 'var(--ink)' : 'var(--dim)';
+    }
+    const pct = triggered ? Math.min(100, phase / 3 * 100) : 0;
+    progBar.style.width = pct + '%';
+    progLabel.textContent = triggered
+      ? `Curveball active since ${D.times[cb.trigger_minute]} · response phase ${Math.max(0, phase)}/3`
+      : `Curveball triggers at ${D.times[cb.trigger_minute]}`;
+  };
+  updateCurveball(F);
+}
 })();
