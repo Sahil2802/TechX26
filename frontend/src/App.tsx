@@ -32,7 +32,7 @@ export default function App() {
     epoch.current += 1
     plantRef.current = nextPlant
     playhead.current = null
-    setPlant(nextPlant); setState(null); setScenario(''); setFireVol('0'); setFireSector('S6'); setLoadError('')
+    setPlant(nextPlant); setState(null); setScenario(''); setFireVol('0'); setFireSector('S6'); setLoadError(''); setBusy(false)
   }, [])
   const logout = useCallback(() => {
     api.setSession('', 'A')
@@ -95,14 +95,15 @@ export default function App() {
   const act = async (fn: () => Promise<DecideResult | void>) => {
     if (busy) return
     setBusy(true)
+    const startedIn = epoch.current
     try {
       const r = await fn()
-      if (r) toast(r.kind, r.message)
+      if (r && epoch.current === startedIn) toast(r.kind, r.message)
       await refresh()
     } catch (e) {
-      toast('error', (e as Error).message)
+      if (epoch.current === startedIn) toast('error', (e as Error).message)
     } finally {
-      setBusy(false)
+      if (epoch.current === startedIn) setBusy(false) // resetView already cleared it for a newer plant
     }
   }
 

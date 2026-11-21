@@ -1,4 +1,6 @@
 """Token login and per-request plant routing."""
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -86,3 +88,22 @@ def test_open_demo_mode(client, monkeypatch):
     assert client.get("/api/state").status_code == 200
     r = client.post("/api/login", json={"token": ""}).json()
     assert r["role"] == "admin" and len(r["plants"]) == 2
+
+
+def test_query_token_and_plant_only_work_on_mission(client):
+    assert client.get("/api/state?token=adm").status_code == 401
+    assert client.get("/api/mission?token=adm&plant=B&scenario=baseline").status_code == 200
+    r = client.post("/api/scenario?plant=B", json={"scenario": "baseline"}, headers=h("adm", "A"))
+    assert r.status_code == 200 and client.get("/api/state", headers=h("adm", "A")).json()["scenario"] == "baseline"
+    assert client.post("/api/scenario?plant=B", json={"scenario": "baseline"}, headers=h("ta")).status_code == 200
+
+
+@pytest.mark.parametrize("target,other", [("B", "A"), ("A", "B")])
+def test_http_write_on_one_plant_leaves_the_other_file_untouched(client, target, other):
+    for p in ("A", "B"):
+        client.get("/api/state", headers=h("adm", p))
+    before = Path(dbm.db_path(other)).read_bytes()
+    a_before = Path(dbm.db_path(target)).read_bytes()
+    assert client.post("/api/scenario", json={"scenario": "peak_2pm"}, headers=h("adm", target)).status_code == 200
+    assert Path(dbm.db_path(target)).read_bytes() != a_before
+    assert Path(dbm.db_path(other)).read_bytes() == before

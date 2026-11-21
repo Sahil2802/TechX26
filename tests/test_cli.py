@@ -128,3 +128,28 @@ def test_missing_database_is_reported(tmp_path, monkeypatch):
 
 def test_cli_is_the_only_place_besides_the_ui_that_wires_human_actions():
     assert agent.KNOWN_TOOLS == {"read_network_telemetry", "read_tariff_and_quality_feeds", "propose_action"}
+
+
+def _approve_with(monkeypatch, token_name, entered):
+    monkeypatch.setattr(config, token_name, "s3cret")
+    monkeypatch.setattr(cli, "getpass", lambda prompt: entered)
+    cli._authorise()
+
+
+@pytest.mark.parametrize("name", ["ADMIN_TOKEN", "PLANT_A_TOKEN"])
+def test_cli_gate_demands_admin_or_plant_a_token(monkeypatch, name):
+    with pytest.raises(SystemExit, match="invalid operator token"):
+        _approve_with(monkeypatch, name, "wrong")
+    _approve_with(monkeypatch, name, "s3cret")
+
+
+def test_cli_is_plant_a_only_so_plant_b_token_does_not_gate_it(monkeypatch, capsys):
+    monkeypatch.setattr(config, "PLANT_B_TOKEN", "s3cret")
+    monkeypatch.setattr(cli, "getpass", lambda prompt: pytest.fail("must not prompt"))
+    cli._authorise()
+    assert "none of ADMIN_TOKEN, OPERATOR_TOKEN, PLANT_A_TOKEN is set" in capsys.readouterr().out
+
+
+def test_cli_gate_warns_when_no_token_is_set(capsys):
+    cli._authorise()
+    assert "none of ADMIN_TOKEN, OPERATOR_TOKEN, PLANT_A_TOKEN is set" in capsys.readouterr().out

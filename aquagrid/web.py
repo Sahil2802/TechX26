@@ -97,6 +97,8 @@ async def plant_context(request: Request, x_operator_token: str | None = Header(
     Must be `async def`: FastAPI runs sync dependencies in a threadpool with a copied context, so a ContextVar
     set there would never reach the sync endpoints. Header wins; the query params exist for the iframe (/api/mission).
     # ponytail: a token in the URL leaks into logs/history (demo-grade); use a short-lived ticket if this ships."""
+    if request.url.path != "/api/mission":  # query fallback is for the iframe only; writes stay header-only
+        token = plant = None
     chosen = x_plant if x_plant is not None else (plant if plant is not None else "A")
     if chosen not in config.PLANTS:
         raise HTTPException(422, "unknown plant")
@@ -151,9 +153,9 @@ def login(body: LoginBody) -> dict:
 
 
 @api.get("/api/state")
-def state(x_operator_token: str | None = Header(default=None), token: str | None = Query(default=None)) -> dict:
+def state(x_operator_token: str | None = Header(default=None)) -> dict:
     _ensure_db()
-    role, allowed = _resolve(x_operator_token or token) or ("admin", [])
+    role, allowed = _resolve(x_operator_token) or ("admin", [])
     snap = view.load_snapshot()
     pre, feeds, res, plant = snap["pre"], snap["feeds"], snap["reservoir"], snap["plant"]
     sched = feeds.schedule

@@ -12,3 +12,10 @@ def db(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DB_PATH", path)
     seed_data.build()
     yield path
+
+
+@pytest.fixture(autouse=True)
+def _no_tokens(monkeypatch):
+    """A developer's .env tokens must not leak into tests; tests that need tokens set them afterwards."""
+    for name in ("ADMIN_TOKEN", "PLANT_A_TOKEN", "PLANT_B_TOKEN", "OPERATOR_TOKEN"):
+        monkeypatch.setattr(config, name, None)

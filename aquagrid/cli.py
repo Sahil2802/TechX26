@@ -39,9 +39,9 @@ def _load_scenario(scenario: str) -> None:
 
 def _authorise() -> None:
     """Operator token gate for human actions. The agent process never holds this token."""
-    expected = config.OPERATOR_TOKEN
+    expected = config.ADMIN_TOKEN or config.OPERATOR_TOKEN or config.PLANT_A_TOKEN  # the CLI is plant A only
     if not expected:
-        print("WARNING: OPERATOR_TOKEN is not set; approvals are unauthenticated (demo mode).")
+        print("WARNING: none of ADMIN_TOKEN, OPERATOR_TOKEN, PLANT_A_TOKEN is set; approvals are unauthenticated (demo mode).")
         return
     if not hmac.compare_digest(getpass("Operator token: "), expected):
         raise SystemExit("invalid operator token")
