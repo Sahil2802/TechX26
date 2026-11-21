@@ -59,8 +59,10 @@ def _topology():
             a, b = _jid(n), _jid(n + 1)
             vid = f"V-S4-{a[1:]}-{b[1:]}" if s == "S4" else None
             pipes.append((f"P-{a}-{b}", a, b, 300, 200, vid))
-    pipes += [("P-J18-J20", "J18", "J20", 350, 150, "V-S4-18-20"),   # S4 loop: hospital J19
-              ("P-J16-J20", "J16", "J20", 400, 150, "V-S4-16-20")]   # stays fed if 17-18 closes
+    # S4 loop: hospital J19 stays fed if 17-18 closes. 200 mm like the mains: at 150 mm the bypass carried
+    # the whole sector at ~2.8 m/s and the hydraulics check (rightly) dropped J19 below 15 m.
+    pipes += [("P-J18-J20", "J18", "J20", 350, 200, "V-S4-18-20"),
+              ("P-J16-J20", "J16", "J20", 400, 200, "V-S4-16-20")]
     valves = sorted({p[5] for p in pipes if p[5]})
     return junctions, pipes, valves
 

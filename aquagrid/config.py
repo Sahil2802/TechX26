@@ -59,6 +59,7 @@ RESERVOIR_CAPACITY_M3 = 40_000.0
 WAVE_SPEED_MS = 1000.0
 DEFAULT_CLOSURE_S = 120
 MAX_SURGE_M = 30.0
+RESERVOIR_HEAD_M = 80.0  # supply head at R1; junctions sit at 11-30 m, so normal service pressure is about 50-69 m
 
 # Agent caps
 MAX_STEPS = 8

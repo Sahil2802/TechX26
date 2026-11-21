@@ -111,7 +111,8 @@ def test_guard_rows_list_every_check(db):
         {"kind": "valve_position", "target_id": "V-S4-17-18", "target_value": 0, "rationale": "leak"}, "r1", "llm:x")
     rows = view.guard_rows(gateway.list_actions()[0])
     assert res.status == "PENDING_APPROVAL"
-    assert [r["Check"] for r in rows] == ["allowlist", "range", "leak_backing", "connectivity", "single_pending"]
+    assert [r["Check"] for r in rows] == ["allowlist", "range", "leak_backing", "connectivity", "single_pending",
+                                          "hydraulics"]
     assert {r["Result"] for r in rows} == {"PASS"}
 
 

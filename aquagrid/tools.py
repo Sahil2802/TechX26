@@ -99,6 +99,7 @@ def load_state(conn: sqlite3.Connection, exclude_action_id: int | None = None) -
         "plant": dict(conn.execute("SELECT * FROM plant").fetchone()),
         "reservoir": dict(conn.execute("SELECT * FROM reservoir").fetchone()),
         "pipes": [dict(r) for r in conn.execute("SELECT * FROM pipes")],
+        "junctions": [dict(r) for r in conn.execute("SELECT * FROM junctions")],
         "scenario": a["scenario"], "leak_findings": a["findings"], "intake_trusted": a["intake_trusted"],
         "bloom_active": a["bloom_active"], "demand_forecast": a["demand_forecast"], "cl_s4": a["cl_s4"],
         "pending_pipes": pending,
