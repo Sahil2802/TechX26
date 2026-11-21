@@ -59,7 +59,8 @@ def __getattr__(name: str):  # TOOL_SPECS stays importable as the current plant'
 
 READ_TOOLS = {"read_network_telemetry": tools.read_network_telemetry,
               "read_tariff_and_quality_feeds": tools.read_tariff_and_quality_feeds}
-KNOWN_TOOLS = {s["function"]["name"] for s in tool_specs()}
+TOOL_NAMES = ("read_network_telemetry", "read_tariff_and_quality_feeds", "propose_action")
+KNOWN_TOOLS = set(TOOL_NAMES)
 
 
 @dataclass

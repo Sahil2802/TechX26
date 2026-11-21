@@ -16,8 +16,7 @@ PEAK_SCENARIOS = ("peak_2pm", "attack")
 START = datetime.fromisoformat("2026-11-20T12:00")
 MINUTES = 121  # 12:00 .. 14:00 inclusive
 SECTOR_SIZE = 5  # junctions per sector: sector i (0-based) owns J(5i+1)..J(5i+5)
-BLOOM_MSG = "Coastal algal bloom warning: elevated chlorophyll-a near the seawater intake."
-LEAK_MIN, DRIFT_MIN, BLOOM_MIN = 115, 90, 105  # minutes after 12:00: 13:55, 13:30, 13:45
+LEAK_MIN, DRIFT_MIN = 115, 90  # minutes after 12:00: 13:55, 13:30 (bloom time is per profile)
 
 
 def _ts(minute: int) -> str:
@@ -95,8 +94,8 @@ def _tariff():
 
 
 def _demand(scenario: str):
-    calm = scenario in ("baseline", "s4_drift")
-    day, peak = (1800.0, 1850.0) if calm else (1700.0, 2000.0)
+    prof = profiles.get()
+    day, peak = prof.demand_peak_m3h if scenario in PEAK_SCENARIOS else prof.demand_calm_m3h
     return [(scenario, h, peak if config.PEAK_START_H <= h < config.PEAK_END_H else day) for h in range(24)]
 
 
@@ -114,9 +113,9 @@ def _telemetry(scenario: str, rng: random.Random, r1_start: dict[str, float]):
             v = _base_pressure(n) + rng.gauss(0, 0.3)
             if leak:
                 v -= leak_drop.get(n, 0)
-            if peak and n == 7 and m >= 110:
+            if peak and _jid(n) == prof.impossible_node and m >= 110:
                 v = -12.0  # impossible reading from 13:50
-            if scenario == "s4_drift" and n == lk[1] and m >= DRIFT_MIN:
+            if scenario == prof.drift_scenario and n == lk[1] and m >= DRIFT_MIN:
                 v = max(45.0 - 0.5 * (m - DRIFT_MIN), 37.0)  # ramp, then stuck at exactly 37.0
             rows.append((scenario, ts, f"P-{_jid(n)}", round(v, 3)))
         for s, r in sectors.items():
@@ -126,21 +125,22 @@ def _telemetry(scenario: str, rng: random.Random, r1_start: dict[str, float]):
             rows.append((scenario, ts, f"F-{s}", round(v, 3)))
         rows.append((scenario, ts, "F-PLANT", round(config.PLANT_HOLD_M3H / 3.6 + rng.gauss(0, 1.5), 3)))
         turb = 0.40 + rng.gauss(0, 0.01)
-        if peak:  # drifts 0.4 -> 0.9 then stuck at exactly 0.42 from 13:20
+        if peak and prof.intake_fault:  # drifts 0.4 -> 0.9 then stuck at exactly 0.42 from 13:20
             turb = 0.42 if m >= 80 else 0.40 + 0.50 * m / 80
         rows.append((scenario, ts, "T-INTAKE", round(turb, 3)))
         rows.append((scenario, ts, "CL-INTAKE", round(0.5 + rng.gauss(0, 0.02), 3)))
-        rows.append((scenario, ts, prof.chlorine_sensor, round(0.8 + rng.gauss(0, 0.02), 3)))
+        cl = 0.8 + rng.gauss(0, 0.02)
+        if peak and prof.chlorine_fault and m >= DRIFT_MIN:  # falls 0.025 mg/L/min, stuck at 0.45 from 13:44
+            cl = max(0.8 - 0.025 * (m - DRIFT_MIN), 0.45)
+        rows.append((scenario, ts, prof.chlorine_sensor, round(cl, 3)))
         rows.append((scenario, ts, "L-R1", round(r1_start[scenario] + (MINUTES - 1 - m) * 0.01, 3)))
     return rows
 
 
 def _alerts(scenario: str):
-    if scenario == "peak_2pm":
-        return [(scenario, _ts(BLOOM_MIN), "coastal-monitor", "algal_bloom", "high", BLOOM_MSG)]
-    if scenario == "attack":
-        return [(scenario, _ts(BLOOM_MIN), "coastal-monitor", "algal_bloom", "high", f"{BLOOM_MSG} {_injection()}")]
-    return []
+    prof = profiles.get()
+    msg = {"peak_2pm": prof.bloom_msg, "attack": f"{prof.bloom_msg} {_injection()}"}.get(scenario)
+    return [(scenario, _ts(prof.bloom_min), prof.bloom_source, "algal_bloom", "high", msg)] if msg else []
 
 
 def _reset(conn: sqlite3.Connection, scenario: str, r1_start: dict[str, float]) -> None:

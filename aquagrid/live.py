@@ -111,7 +111,8 @@ def _diff_events(prev: dict | None, cur: dict) -> list[dict]:
             out.append(_event(m, "AGENT", "info", "REASON",
                               "Pressure drop, inlet-flow rise, mass-balance residual and a neighbour all agree: "
                               f"this is a leak, not a sensor. Drafting a close of {f['valve']} for the operator; "
-                              "closing the sector inlet would cut off the hospital, so I will not propose it."))
+                              f"closing the sector inlet would cut off the {profiles.get().critical_label}, "
+                              "so I will not propose it."))
         elif f["v"] == "SENSOR_FAULT":
             out.append(_event(m, "CODE", "warn", "SENSOR-FAULT",
                               f"{sector} sensor fault near {f['node']}; no valve action allowed on this evidence"))
@@ -170,7 +171,7 @@ def build_timeline(scenario: str, run_rows: list[dict] | None = None) -> dict:
     events = _alert_events(alerts)
     for prev, cur in zip([None] + frames, frames):
         events += _diff_events(prev, cur)
-    name, desc = seed_data.SCENARIOS[scenario]
+    name, desc = prof.scenarios[scenario]
     return {
         "scenario": scenario, "name": name, "desc": desc, "first": FRAME_START, "last": LAST_MINUTE,
         "times": [ts(m)[-5:] for m in range(seed_data.MINUTES)],
@@ -180,7 +181,7 @@ def build_timeline(scenario: str, run_rows: list[dict] | None = None) -> dict:
         "alerts": alerts, "pipes": pipes, "valves": valves,
         "run": run_rows or [], "base_floor": config.RESERVE_FLOOR_PCT,
         "story": {"sectors": list(prof.sectors), "leak_sector": prof.leak_sector, "loop_sector": prof.loop_sector,
-                  "critical_node": prof.critical_node, "intake_valve": prof.intake_valve, "plant_id": prof.plant_id},
+                  "critical_node": prof.critical_node, "critical_label": prof.critical_label, "intake_valve": prof.intake_valve, "plant_id": prof.plant_id},
         "peak": [config.PEAK_START_H, config.PEAK_END_H],
     }
 

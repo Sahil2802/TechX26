@@ -53,7 +53,7 @@ def _ensure_db() -> None:
 
 
 def _load_scenario(scenario: str) -> None:
-    if scenario not in seed_data.SCENARIOS:
+    if scenario not in profiles.get().scenarios:
         raise HTTPException(422, f"unknown scenario {scenario!r}")
     _ensure_db()
     conn = db.connect()
@@ -164,7 +164,7 @@ def state(x_operator_token: str | None = Header(default=None), token: str | None
     last = _last_run.get(db.current_plant())
     return {
         "scenario": snap["scenario"], "loaded": view.loaded_scenario(),
-        "scenarios": {k: {"name": v[0], "blurb": v[1]} for k, v in seed_data.SCENARIOS.items()},
+        "scenarios": {k: {"name": v[0], "blurb": v[1]} for k, v in profiles.get().scenarios.items()},
         "demo_now": config.DEMO_NOW, "operator_token_required": _tokens_configured(),
         "plant": db.current_plant(), "plants": _plants_json(allowed), "role": role,
         "llm_chain": llm.available(), "fire_sectors": list(profiles.get().fire_sectors),
@@ -254,7 +254,7 @@ def _mission_html(plant: str, scenario: str, run_id: str | None, db_stamp: int) 
 @api.get("/api/mission", response_class=HTMLResponse)
 def mission(scenario: str, key: str = "") -> HTMLResponse:
     """Read-only Mission Control replay page (self-contained HTML) for one scenario."""
-    if scenario not in seed_data.SCENARIOS:
+    if scenario not in profiles.get().scenarios:
         raise HTTPException(422, f"unknown scenario {scenario!r}")
     _ensure_db()
     last = _last_run.get(db.current_plant())

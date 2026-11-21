@@ -41,6 +41,7 @@ $('roiWin').textContent = pad2(D.peak[0]) + ':00–' + pad2(D.peak[1]) + ':00';
 
 // ---------- map ----------
 const map = $('map');
+$('mapSecs').textContent = D.story.sectors[0] + '–' + D.story.sectors[D.story.sectors.length - 1];
 const ST = D.story, SEC = [...ST.sectors.filter(x => x !== ST.loop_sector), ST.loop_sector]; // loop sector drawn last (bottom, with its bypass)
 const POS = { PLANT: [46, 170], R1: [140, 170] };
 const rowY = [50, 120, 190];
@@ -84,7 +85,7 @@ for (let n = 1; n <= 20; n++) {
   const ping = s('circle', { class: 'ping', cx: x, cy: y, r: 8, style: 'display:none' }, g);
   const node = hosp ? s('rect', { class: 'node hosp', x: x - 9, y: y - 9, width: 18, height: 18 }, g) : s('circle', { class: 'node', cx: x, cy: y, r: 7 }, g);
   if (hosp) s('text', { x, y: y + 4, 'text-anchor': 'middle', fill: 'var(--info)', 'font-size': 13, 'font-weight': 700 }, g, '+');
-  s('text', { class: 'nlbl', x, y: y + (hosp ? 22 : 19) }, g, hosp ? id + ' HOSPITAL' : id);
+  s('text', { class: 'nlbl', x, y: y + (hosp ? 22 : 19) }, g, hosp ? id + ' ' + ST.critical_label.toUpperCase() : id);
   nodeEls[id] = { node, ping };
 }
 
@@ -112,7 +113,7 @@ function updateMap(m) {
   floorLn.setAttribute('y1', fy); floorLn.setAttribute('y2', fy);
   tankTxt.textContent = lvl.toFixed(1) + '% · floor ' + fr.floor.toFixed(0) + '%';
   plantTxt.textContent = (val('F-PLANT', m) * 3.6).toFixed(0) + ' m³/h';
-  $('mapSub').textContent = ST.critical_node + ' hospital: ' + (D.valves[ST.intake_valve] === 0 ? 'CUT OFF' : 'supplied');
+  $('mapSub').textContent = ST.critical_node + ' ' + ST.critical_label + ': ' + (D.valves[ST.intake_valve] === 0 ? 'CUT OFF' : 'supplied');
   gTags.replaceChildren();
   const ids = [...new Set([...fr.leak, ...Object.keys(fr.bad)])].filter(id => id.startsWith('P-J'));
   ids.forEach((sid, i) => {

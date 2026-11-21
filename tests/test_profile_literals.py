@@ -6,10 +6,11 @@ import dataclasses
 import pytest
 from fastapi.testclient import TestClient
 
-from aquagrid import agent, config, db, guards, profiles, seed_data, tools, web
+from aquagrid import agent, config, db, guards, live, profiles, seed_data, tools, web
 
 VARIANT = dict(leak_sector="S3", loop_sector="S2", critical_node="J09", chlorine_sensor="CL-S2",
-               fire_sectors=("S6", "S1"), intake_valve="V-S2-IN", plant_id="PLANT-B")
+               fire_sectors=("S6", "S1"), intake_valve="V-S2-IN", plant_id="PLANT-B",
+               chlorine_fault=False)  # keep CL-S2 healthy so cl_s4 is a reading
 
 
 @pytest.fixture(autouse=True)
@@ -60,7 +61,14 @@ def test_variant_leak_and_chlorine_key_off_the_profile(plant_b):
         conn.close()
     verdicts = {f.sector: f.verdict for f in a["findings"]}
     assert verdicts["S3"] == "GENUINE_LEAK" and verdicts["S4"] == "NONE"
-    assert a["cl_s4"] is not None  # read from CL-S2
+    assert a["cl_s4"] == a["series"]["CL-S2"][-1]  # read from CL-S2, not CL-S4
+
+
+def test_variant_timeline_story_comes_from_profile(plant_b):
+    db.set_plant("B")
+    t = live.build_timeline("peak_2pm")
+    assert t["story"]["leak_sector"] == "S3" and t["story"]["critical_node"] == "J09"
+    assert t["story"]["plant_id"] == "PLANT-B" and t["name"] == profiles.get("B").scenarios["peak_2pm"][0]
 
 
 def test_variant_guard_critical_node_and_agent_surfaces(plant_b):

@@ -59,7 +59,7 @@ def test_plants_are_isolated(client):
     dbm.set_plant("B")
     try:
         res = gateway.stage_gated_valve_or_setpoint_action(
-            {"kind": "valve_position", "target_id": "V-S4-17-18", "target_value": 0, "rationale": "t"},
+            {"kind": "valve_position", "target_id": "V-S2-07-08", "target_value": 0, "rationale": "t"},
             run_id="r", proposed_by="test")
     finally:
         dbm.set_plant("A")

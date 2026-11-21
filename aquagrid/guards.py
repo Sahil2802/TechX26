@@ -13,7 +13,7 @@ _INJECTION_PATTERNS = {
     "system_prefix": r"\bsystem\s*(override)?\s*:",
     "approval_field": r"approved\s*=",
     "pre_approved": r"pre-?approved",
-    "action_command": r"\b(execute|close|open|set)\b.{0,40}(\bvalve\b|\bV-[A-Z0-9-]+|\bPLANT-\d)",
+    "action_command": r"\b(execute|close|open|set)\b.{0,40}(\bvalve\b|\bV-[A-Z0-9-]+|\bPLANT-\w+)",
     "role_change": r"you\s+are\s+now",
     "code_fence": r"```",
     "tool_name": r"stage_gated_valve_or_setpoint_action|propose_action|execute_valve|run_sql",
