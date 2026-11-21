@@ -26,5 +26,27 @@ export const stageDemo = () => call<DecideResult>('/api/stage-demo', {})
 export const missionUrl = (scenario: string, key: string, at: number | null = null) =>
   `/api/mission?scenario=${encodeURIComponent(scenario)}&key=${encodeURIComponent(key)}` +
   (at === null ? '' : `&at=${at.toFixed(2)}`)
-export const decide = (id: number, verb: Verb, operator: string, note: string) =>
-  call<DecideResult>(`/api/actions/${id}/${verb}`, { operator, note })
+export const decide = (id: number, verb: Verb, operator: string, note: string, token?: string) =>
+  call<DecideResult>(`/api/actions/${id}/${verb}`, { operator, note, token })
+
+export const injectChlorine = (sector: string, value: number) =>
+  call<{ ok: true; sector: string; value: number }>('/api/curveball/chlorine', { sector, value })
+
+export const stageIsolationFlush = () =>
+  call<DecideResult>('/api/stage-isolation-flush', {})
+
+export const scadaAction = (action: 'drop' | 'restore') =>
+  call<{ ok: true; action: string }>('/api/curveball/scada', { action })
+
+export const addWorkTicket = (details: string) =>
+  call<{ ok: true; ticket_id: string }>('/api/curveball/ticket', { ticket_id: 'TCK-4819', assigned_to: 'field-crew', details })
+
+export const issueApprovalToken = (action_id: number, operator: string, valid_minutes = 15) =>
+  call<{ token: string; action_id: number; action_type: string; target_id: string; target_value: number; expires_ts: string }>(
+    '/api/curveball/token/issue', { action_id, operator, valid_minutes }
+  )
+
+export const testTokenReplay = (token: string, action_id: number, operator: string, test_target_id?: string, simulate_time?: string) =>
+  call<{ allowed: boolean; status: string; reason: string }>('/api/curveball/token/replay-test', {
+    token, action_id, operator, test_target_id, simulate_time
+  })

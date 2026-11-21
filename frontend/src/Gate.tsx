@@ -10,15 +10,17 @@ interface GateProps {
   disabled: boolean
   demoLeak: { valve: string; pipe: string | null } | null
   onStageDemo: () => void
-  onDecide: (id: number, verb: Verb, operator: string, note: string) => void
+  onStageIsolationFlush?: () => void
+  onDecide: (id: number, verb: Verb, operator: string, note: string, token?: string) => void
 }
 
-export function ApprovalGate({ actions, disabled, demoLeak, onStageDemo, onDecide }: GateProps) {
+export function ApprovalGate({ actions, disabled, demoLeak, onStageDemo, onStageIsolationFlush, onDecide }: GateProps) {
   const [operator, setOperator] = useState('operator')
   const [notes, setNotes] = useState<Record<number, string>>({})
+  const [tokens, setTokens] = useState<Record<number, string>>({})
   const pending = actions.filter((a) => a.status === 'PENDING_APPROVAL')
   const decided = actions.filter((a) => a.status !== 'PENDING_APPROVAL')
-  const go = (id: number, verb: Verb) => onDecide(id, verb, operator, notes[id] ?? '')
+  const go = (id: number, verb: Verb) => onDecide(id, verb, operator, notes[id] ?? '', tokens[id] || undefined)
 
   return (
     <>
@@ -31,15 +33,25 @@ export function ApprovalGate({ actions, disabled, demoLeak, onStageDemo, onDecid
       </div>
 
       {pending.length === 0 && <div className="alert a-info">No actions are waiting for approval.</div>}
-      {pending.length === 0 && demoLeak && (
-        <button disabled={disabled} onClick={onStageDemo}>
-          Demo: stage closure of {demoLeak.valve} (confirmed leak on {demoLeak.pipe})
-        </button>
-      )}
+      <div className="bar">
+        {pending.length === 0 && demoLeak && (
+          <button disabled={disabled} onClick={onStageDemo}>
+            Demo: stage closure of {demoLeak.valve} (confirmed leak on {demoLeak.pipe})
+          </button>
+        )}
+        {onStageIsolationFlush && (
+          <button disabled={disabled} onClick={onStageIsolationFlush}>
+            Demo: Stage Sector 2 Isolation &amp; Flush (U-5.1)
+          </button>
+        )}
+      </div>
       {pending.map((a) => (
         <div key={a.id} className="action">
           <div>
             <b>#{a.id} · {a.kind.replace('_', ' ')} · <code>{a.target_id}</code></b>: {a.from_value} → <b>{a.to_value}</b>
+            {a.from_untrusted_text && (
+              <span className="pill p-att" style={{ marginLeft: '0.5rem' }}>⚠️ ORIGIN: UNTRUSTED TEXT</span>
+            )}
             <br /><span className="mut">Proposed by <code>{a.proposed_by}</code>: {a.rationale}</span>
             <div className="scroll">
               <table>
@@ -59,6 +71,8 @@ export function ApprovalGate({ actions, disabled, demoLeak, onStageDemo, onDecid
           <div className="btns">
             <input placeholder="Note (optional)" maxLength={300} value={notes[a.id] ?? ''}
               onChange={(e) => setNotes({ ...notes, [a.id]: e.target.value })} />
+            <input placeholder="Approval Token (optional, U-5.4)" value={tokens[a.id] ?? ''}
+              onChange={(e) => setTokens({ ...tokens, [a.id]: e.target.value })} />
             <button className="primary" disabled={disabled} onClick={() => go(a.id, 'approve')}>Approve &amp; execute</button>
             <button disabled={disabled} onClick={() => go(a.id, 'reject')}>Reject</button>
           </div>

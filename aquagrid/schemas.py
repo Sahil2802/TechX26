@@ -77,11 +77,34 @@ class ActionRequest(BaseModel):
     """What the LLM may send. NOTHING else: no approved/execute_now field exists."""
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["valve_position", "plant_setpoint"]
+    kind: Literal["valve_position", "plant_setpoint", "isolation_and_flush"]
     target_id: str = Field(pattern=r"^[A-Z0-9-]{2,20}$")
-    target_value: float  # valve: 0-100 % open; plant: m3/h
+    target_value: float = 0.0  # valve: 0-100 % open; plant: m3/h; isolation_and_flush: 0
     rationale: str = Field(max_length=600)
     evidence: list[str] = Field(default=[], max_length=10)
+
+
+class ApprovalTokenRecord(BaseModel):
+    """U-5.4: Single-use, parameter-bound, expiring approval token."""
+    token: str
+    action_id: int
+    action_type: str
+    target_id: str
+    target_value: float
+    created_ts: str
+    expires_ts: str
+    used_ts: str | None = None
+    used_by: str | None = None
+    status: Literal["ACTIVE", "USED", "EXPIRED", "REVOKED"] = "ACTIVE"
+
+
+class WorkTicket(BaseModel):
+    """U-5.3: Field crew work ticket returned by read tools (untrusted text)."""
+    ticket_id: str
+    ts: str
+    assigned_to: str
+    details: str
+    flags: list[str] = []
 
 
 class SimReport(BaseModel):
@@ -110,6 +133,9 @@ class ActionRecord(BaseModel):
     note: str | None = None
     created_ts: str
     decided_ts: str | None = None
+    provenance: str = "agent"  # U-5.3: provenance tracking ('agent' | 'untrusted_text')
+    from_untrusted_text: bool = False
+    approval_token: str | None = None  # U-5.4: token consumed for execution
 
 
 class StageResult(BaseModel):
@@ -137,6 +163,11 @@ class TariffQualityFeed(BaseModel):
     alerts: list[dict]  # sanitized text + flags
     intake_quality: dict  # turbidity/chlorine health + trusted flag
     schedule: Schedule
+    scada_stale: bool = False           # U-5.5: SCADA quiet flag
+    telemetry_loss: bool = False        # U-5.5: telemetry drop alert
+    non_compliant_sectors: list[str] = [] # U-5.1: sectors failing water quality floor
+    sector_chlorine: dict[str, float] = {} # U-5.1: chlorine residual readings per sector
+    work_tickets: list[dict] = []       # U-5.3: sanitized field crew tickets
 
 
 class AuditEvent(BaseModel):
