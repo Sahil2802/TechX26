@@ -103,7 +103,7 @@ svg text { fill: var(--mut); font-size: 11px; font-family: inherit; }
 .stage > div > h2:first-child { margin-top: 4px; }
 
 /* Mission Control's own stylesheet needs >= 1180px (and clips overflow), so scroll the wrapper on narrower stages. */
-.mission-wrap { position: relative; height: 960px; overflow-x: auto; border: 1px solid var(--glass-line); border-radius: 14px; background: var(--glass); }
+.mission-wrap { position: relative; height: 960px; overflow-x: auto; border: 1px solid var(--glass-line); border-radius: 14px; background: var(--glass); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%); }
 .mission-loading { position: absolute; inset: 0; display: grid; place-items: center; }
 iframe.mission { position: relative; display: block; width: 100%; min-width: 1180px; height: 100%; border: 0; border-radius: 14px; background: transparent; }
 

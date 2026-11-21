@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from './api'
+import * as sfx from './sfx'
 import { Login, type Session } from './Login'
 import { ApprovalGate, RunPanel } from './Gate'
 import { Findings, MetricCards, ReservoirChart, ScheduleSection, SensorsPanel } from './Panels'
@@ -43,6 +44,7 @@ export default function App() {
 
   const toast = useCallback((kind: Toast['kind'], text: string) => {
     const id = ++toastId.current
+    sfx.play(kind)
     setToasts((t) => [...t, { id, kind, text }])
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 7000)
   }, [])
@@ -71,17 +73,29 @@ export default function App() {
     })
   }, [refresh, toast, session, plant])
 
-  const onReady = (s: Session) => { api.setSession(s.token, s.plant); resetView(s.plant); setSession(s) }
-  const switchPlant = (id: string) => { if (!session) return; api.setSession(session.token, id); resetView(id) }
+  const onReady = (s: Session) => { sfx.play('boot'); api.setSession(s.token, s.plant); resetView(s.plant); setSession(s) }
+  const switchPlant = (id: string) => { if (!session) return; sfx.play('relay'); api.setSession(session.token, id); resetView(id) }
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
-      const at = (e.data as { aquagridPlayhead?: unknown } | null)?.aquagridPlayhead
-      if (e.source === missionFrame.current?.contentWindow && typeof at === 'number' && Number.isFinite(at)) playhead.current = at
+      if (e.source !== missionFrame.current?.contentWindow) return
+      const data = e.data as { aquagridPlayhead?: unknown; aquagridSfx?: unknown } | null
+      const at = data?.aquagridPlayhead
+      if (typeof at === 'number' && Number.isFinite(at)) playhead.current = at
+      if (sfx.isSfx(data?.aquagridSfx)) sfx.play(data.aquagridSfx) // Mission Control banner changed severity
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [])
+
+  // A new approval request is the one event that needs a human: sound the attention chime when the count rises.
+  const pendingCount = state?.actions.filter((a) => a.status === 'PENDING_APPROVAL').length ?? 0
+  const prevPending = useRef<number | null>(null)
+  useEffect(() => {
+    if (!state) { prevPending.current = null; return } // plant switch / logout: don't chime for the initial load
+    if (prevPending.current !== null && pendingCount > prevPending.current) sfx.play('attention')
+    prevPending.current = pendingCount
+  }, [state, pendingCount])
 
   // Recomputed only when the data version (or scenario) changes, never on unrelated re-renders, so typing in a form
   // can't reload the replay; when it does reload (new run, new data) it resumes at the viewer's minute.
@@ -124,7 +138,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <HeroVideo />
+      <HeroVideo plant={state.plant} />
       <TopBar clock={state.demo_now} tab={tab} onTab={setTab} pending={pending.length}
         plant={state.plant} plants={state.plants} admin={session.role === 'admin'} onPlant={switchPlant} />
       <Hero levelPct={state.metrics.level_pct} floorPct={state.metrics.floor_pct} band={state.metrics.band} pending={pending.length} />

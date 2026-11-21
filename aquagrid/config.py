@@ -77,6 +77,6 @@ OPERATOR_TOKEN = os.getenv("OPERATOR_TOKEN")
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN")
 PLANT_A_TOKEN = os.getenv("PLANT_A_TOKEN")
 PLANT_B_TOKEN = os.getenv("PLANT_B_TOKEN")
-PLANTS = {"A": "Coastal Plant", "B": "Gulf Plant"}
+PLANTS = {"A": "NAQAA Desalination Plant LLC", "B": "Al Kafaah Reverse Osmosis Desalination Company"}
 # Cloud first for tool-calling quality; Ollama last as the offline safety net. Providers without a key are skipped.
 LLM_CHAIN = os.getenv("LLM_CHAIN", "groq,gemini,ollama").split(",")

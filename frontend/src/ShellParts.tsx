@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import * as sfx from './sfx'
 import type { PlantInfo, State } from './types'
 
 export type Tab = 'overview' | 'telemetry' | 'approvals' | 'log'
@@ -36,8 +38,19 @@ export function TopBar({ clock, tab, onTab, pending, plant, plants, admin, onPla
           </button>
         ))}
       </div>
+      <SoundToggle />
       <div className="clock mut">synthetic demo data · simulated clock <b>{clock.replace('T', ' ')}</b></div>
     </header>
+  )
+}
+
+function SoundToggle() {
+  const [off, setOff] = useState(sfx.isMuted())
+  return (
+    <button className="tab" aria-pressed={!off} title={off ? 'Sound off' : 'Sound on'}
+      onClick={() => { sfx.setMuted(!off); setOff(!off) }}>
+      {off ? '🔇 Sound off' : '🔊 Sound on'}
+    </button>
   )
 }
 
@@ -91,12 +104,13 @@ export function Rail(p: RailProps) {
   )
 }
 
-// Full-page looping backdrop; panels blur it. Decorative: muted, aria-hidden, and held on its first frame under reduced motion.
-export function HeroVideo() {
+// Full-page looping backdrop for the selected plant; panels blur it. Keyed by plant so a switch swaps the clip
+// while the data updates underneath. Decorative: muted, aria-hidden, held on its first frame under reduced motion.
+export function HeroVideo({ plant }: { plant: string }) {
   const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
   return (
     <div className="hero-bg" aria-hidden="true">
-      <video src="/hero.mp4" muted loop playsInline autoPlay={!still} preload="metadata" />
+      <video key={plant} src={`/hero-${plant}.mp4`} muted loop playsInline autoPlay={!still} preload="metadata" />
     </div>
   )
 }

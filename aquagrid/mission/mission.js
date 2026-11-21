@@ -308,6 +308,7 @@ function updateMatrix(m) {
 }
 
 // ---------- banner ----------
+let lastKind;
 function updateBanner(m) {
   const fr = frameAt(m), al = alarmsOf(fr, m), top = al.reduce((a, b) => Math.max(a, b.rank), 0);
   const kind = ['nominal', 'advisory', 'advisory', 'alarm', 'security'][top], b = $('banner');
@@ -323,6 +324,9 @@ function updateBanner(m) {
   }
   if (kind === 'alarm') { g = '◆'; const lk = Object.values(fr.sectors).find(f => f.v === 'GENUINE_LEAK'); msg = 'ALARM · LEAK ' + lk.pipe + ' · ISOLATE ' + lk.valve + ' · AWAITING OPERATOR APPROVAL'; }
   if (kind === 'security') { g = '■'; msg = 'SECURITY ALERT · PROMPT INJECTION DETECTED · UNTRUSTED TEXT REDACTED · WRITES LOCKED TO HUMAN APPROVAL'; }
+  // Ask the parent console (which owns the audio + mute switch) to sound the severity change.
+  if (lastKind !== undefined && lastKind !== kind) { try { parent.postMessage({ aquagridSfx: kind === 'nominal' ? 'clear' : kind }, '*'); } catch (e) { /* standalone page */ } }
+  lastKind = kind;
   b.dataset.s = kind; $('bG').textContent = g; $('bT').textContent = msg;
   $('bC').textContent = nFault + ' fault · ' + nLeak + ' leak · ' + al.filter(a => a.rank === 4).length + ' security · floor ' + fr.floor.toFixed(0) + '%';
   document.body.classList.toggle('attack', kind === 'security');
