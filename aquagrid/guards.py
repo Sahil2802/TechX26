@@ -119,10 +119,8 @@ def project_reservoir(level_pct: float, production_m3h: list[float], demand_m3h:
     return levels
 
 
-def connectivity_ok(pipes: list[dict], closed_pipe_ids: set[str], source: str = "R1",
-                    critical: list[str] | None = None) -> tuple[bool, list[str]]:
-    """BFS from the source over open pipes. Returns (all critical nodes supplied, unreachable ones)."""
-    critical = config.CRITICAL_NODES if critical is None else critical
+def reachable_nodes(pipes: list[dict], closed_pipe_ids: set[str], source: str = "R1") -> set[str]:
+    """Every node the source can still reach over open pipes (BFS)."""
     adjacency: dict[str, list[str]] = {}
     for p in pipes:
         if p["id"] not in closed_pipe_ids:
@@ -134,6 +132,14 @@ def connectivity_ok(pipes: list[dict], closed_pipe_ids: set[str], source: str = 
             if nxt not in seen:
                 seen.add(nxt)
                 queue.append(nxt)
+    return seen
+
+
+def connectivity_ok(pipes: list[dict], closed_pipe_ids: set[str], source: str = "R1",
+                    critical: list[str] | None = None) -> tuple[bool, list[str]]:
+    """Returns (all critical nodes supplied, unreachable ones)."""
+    critical = config.CRITICAL_NODES if critical is None else critical
+    seen = reachable_nodes(pipes, closed_pipe_ids, source)
     unreachable = sorted(n for n in critical if n not in seen)
     return not unreachable, unreachable
 
