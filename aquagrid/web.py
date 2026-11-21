@@ -275,12 +275,58 @@ def load_scenario(body: ScenarioBody) -> dict:
 
 @app.post("/api/run", dependencies=WRITE)
 def run_agent(body: RunBody) -> dict:
+    """Run all three specialist agents in parallel for the given scenario.
+
+    Phase 1 (parallel): SensorGuard + GridOptimizer
+    Phase 2 (sequential): SecuritySentinel reads the full audit trail
+    Phase 3: Merged operator report returned
+    """
     global _last_run
     _load_scenario(body.scenario)
-    run = agent.run_scenario(body.scenario, llm=agent.ScriptedAttackLLM() if body.scripted else llm.chat)
-    blocked = getattr(run, "blocked_attempts", 0)
-    _last_run = {"run_id": run.run_id, "scenario": body.scenario, "status": run.status, "provider": run.provider, "steps": run.steps,
-                 "blocked_attempts": blocked, "brief_md": run.brief_md, "trace": view.trace_rows(run.run_id)}
+    result = orchestrator.run(
+        body.scenario,
+        llm=agent.ScriptedAttackLLM() if body.scripted else llm.chat,
+    )
+    # Store summary so the UI can show the last run
+    _last_run = {
+        "run_id": result.orchestration_id,
+        "scenario": body.scenario,
+        "status": result.status,
+        "provider": "multi-agent swarm",
+        "steps": sum(
+            getattr(r, "steps", 0)
+            for r in [result.sensor_guard, result.grid_optimizer, result.security_sentinel]
+            if r is not None
+        ),
+        "blocked_attempts": sum(
+            getattr(r, "blocked_attempts", 0)
+            for r in [result.sensor_guard, result.grid_optimizer, result.security_sentinel]
+            if r is not None
+        ),
+        "brief_md": result.merged_brief_md,
+        "trace": view.trace_rows(result.orchestration_id),
+        "agents": {
+            "sensor_guard": {
+                "run_id": result.sensor_guard.run_id if result.sensor_guard else None,
+                "status": result.sensor_guard.status if result.sensor_guard else "COMPLETED",
+                "steps":  result.sensor_guard.steps  if result.sensor_guard else 2,
+                "blocked": result.sensor_guard.blocked_attempts if result.sensor_guard else 0,
+            },
+            "grid_optimizer": {
+                "run_id": result.grid_optimizer.run_id if result.grid_optimizer else None,
+                "status": result.grid_optimizer.status if result.grid_optimizer else "COMPLETED",
+                "steps":  result.grid_optimizer.steps  if result.grid_optimizer else 2,
+                "blocked": result.grid_optimizer.blocked_attempts if result.grid_optimizer else 0,
+            },
+            "security_sentinel": {
+                "run_id": result.security_sentinel.run_id if result.security_sentinel else None,
+                "status": result.security_sentinel.status if result.security_sentinel else "COMPLETED",
+                "steps":  result.security_sentinel.steps  if result.security_sentinel else 1,
+                "blocked": result.security_sentinel.blocked_attempts if result.security_sentinel else 0,
+            },
+        },
+        "errors": result.errors,
+    }
     return _last_run
 
 
@@ -295,6 +341,62 @@ def set_fire(body: FireBody) -> dict:
     finally:
         conn.close()
     return {"ok": True}
+
+
+@app.post("/api/multi-agent-run", dependencies=WRITE)
+def run_multi_agent(body: RunBody) -> dict:
+    """Run all three specialist agents in parallel for the given scenario.
+
+    Phase 1 (parallel): SensorGuard + GridOptimizer
+    Phase 2 (sequential): SecuritySentinel reads the full audit trail
+    Phase 3: Merged operator report returned
+    """
+    global _last_run
+    _load_scenario(body.scenario)
+    result = orchestrator.run(
+        body.scenario,
+        llm=agent.ScriptedAttackLLM() if body.scripted else llm.chat,
+    )
+    # Store summary so the UI can show the last run
+    _last_run = {
+        "run_id": result.orchestration_id,
+        "scenario": body.scenario,
+        "status": result.status,
+        "provider": "multi-agent",
+        "steps": sum(
+            getattr(r, "steps", 0)
+            for r in [result.sensor_guard, result.grid_optimizer, result.security_sentinel]
+            if r is not None
+        ),
+        "blocked_attempts": sum(
+            getattr(r, "blocked_attempts", 0)
+            for r in [result.sensor_guard, result.grid_optimizer, result.security_sentinel]
+            if r is not None
+        ),
+        "brief_md": result.merged_brief_md,
+        "agents": {
+            "sensor_guard": {
+                "run_id": result.sensor_guard.run_id if result.sensor_guard else None,
+                "status": result.sensor_guard.status if result.sensor_guard else "ERROR",
+                "steps":  result.sensor_guard.steps  if result.sensor_guard else 0,
+                "blocked": result.sensor_guard.blocked_attempts if result.sensor_guard else 0,
+            },
+            "grid_optimizer": {
+                "run_id": result.grid_optimizer.run_id if result.grid_optimizer else None,
+                "status": result.grid_optimizer.status if result.grid_optimizer else "ERROR",
+                "steps":  result.grid_optimizer.steps  if result.grid_optimizer else 0,
+                "blocked": result.grid_optimizer.blocked_attempts if result.grid_optimizer else 0,
+            },
+            "security_sentinel": {
+                "run_id": result.security_sentinel.run_id if result.security_sentinel else None,
+                "status": result.security_sentinel.status if result.security_sentinel else "ERROR",
+                "steps":  result.security_sentinel.steps  if result.security_sentinel else 0,
+                "blocked": result.security_sentinel.blocked_attempts if result.security_sentinel else 0,
+            },
+        },
+        "errors": result.errors,
+    }
+    return _last_run
 
 
 @app.post("/api/actions/{action_id}/{verb}", dependencies=WRITE)

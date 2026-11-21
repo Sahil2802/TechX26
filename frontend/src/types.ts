@@ -67,6 +67,13 @@ export interface Action {
 
 export interface TraceRow { '#': number; Who: string; Step: string; Detail: string }
 
+export interface AgentInfo {
+  run_id: string | null
+  status: string
+  steps: number
+  blocked: number
+}
+
 export interface Run {
   run_id: string
   scenario: string
@@ -76,6 +83,11 @@ export interface Run {
   blocked_attempts: number
   brief_md: string
   trace: TraceRow[]
+  agents?: {
+    sensor_guard?: AgentInfo
+    grid_optimizer?: AgentInfo
+    security_sentinel?: AgentInfo
+  }
 }
 
 export interface ChlorineStatus {
