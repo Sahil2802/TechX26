@@ -123,4 +123,16 @@ PLAN.md             scope and design source of truth
   the limits in `config.py` are already in place; the simulator and gateway wiring are not.
 - FastAPI operator API with a token-protected approve endpoint (`fastapi` and `uvicorn` are already
   dependencies).
-- Work-order generator ranked by water loss, and an energy-water ROI dashboard.
+- Work-order generator ranked by water loss.
+
+The energy-water ROI dashboard is built; see Mission Control below.
+
+## Mission Control
+
+The first tab of the Streamlit app is a live replay (12:00 to 14:00) of the selected scenario: network map, anomaly radar,
+agent feed, alarm list, sensor matrix and the energy-water ROI. Every figure comes from the same guards the agent uses
+(`aquagrid/live.py`); the page itself is `aquagrid/mission/`. Pick `attack` and press Run agent with "Scripted attacker"
+to see the red security state.
+
+The ROI panel shows the peak-tariff kWh the plan banks, the kWh the reserve floor blocked, the AED saved, and the energy
+wasted by the Sector 4 leak, so savings are always shown next to the floor that limits them.

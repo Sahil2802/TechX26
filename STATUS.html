@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AquaGrid Status</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #14202b; --muted: #5b6b7a; --line: #dde3ea;
+    --done: #1a7f4b; --done-bg: #e3f4ea; --part: #9a6700; --part-bg: #fff3d1;
+    --todo: #b3261e; --todo-bg: #fde7e5; --accent: #0b66c3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1720; --card: #17212c; --ink: #e6edf3; --muted: #94a3b3; --line: #2a3745;
+      --done: #4cc38a; --done-bg: #12301f; --part: #e3b341; --part-bg: #3a2e0c;
+      --todo: #ff8a80; --todo-bg: #3d1816; --accent: #58a6ff;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  h2 { margin: 36px 0 12px; font-size: 1.15rem; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .tile b { display: block; font-size: 1.7rem; line-height: 1.1; }
+  .tile span { color: var(--muted); font-size: .85rem; }
+  .grid { display: grid; gap: 10px; }
+  .row { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+         display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: start; }
+  .row h3 { margin: 0; font-size: 1rem; }
+  .row p { margin: 0; grid-column: 1 / -1; color: var(--muted); font-size: .92rem; }
+  .pill { font-size: .75rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+          align-self: start; }
+  .done { color: var(--done); background: var(--done-bg); }
+  .part { color: var(--part); background: var(--part-bg); }
+  .todo { color: var(--todo); background: var(--todo-bg); }
+  code { background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; font-size: .85em; }
+  ul { margin: 6px 0 0; padding-left: 20px; grid-column: 1 / -1; color: var(--muted); font-size: .92rem; }
+  li { margin: 3px 0; }
+  .note { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+          color: var(--muted); font-size: .92rem; }
+  footer { margin-top: 40px; color: var(--muted); font-size: .85rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>AquaGrid: build status</h1>
+  <p class="sub">TechX Dubai 2026, Track 5 (Water Network Orchestration Agent). Status as of 21 Nov 2026, checked against the code and a full test run.</p>
+
+  <div class="tiles">
+    <div class="tile"><b>197</b><span>tests passing (98% coverage)</span></div>
+    <div class="tile"><b>1 of 5</b><span>Round 2 curveballs done</span></div>
+    <div class="tile"><b>2 of 3</b><span>named stretch goals done</span></div>
+    <div class="tile"><b>0</b><span>of the new work committed</span></div>
+  </div>
+
+  <h2>Core agent (Round 1)</h2>
+  <div class="grid">
+    <div class="row"><h3>Safety guards, gateway, agent, UI</h3><span class="pill done">Done</span>
+      <p>Sensor health (flatline, drift, impossible values, mass balance), reservoir floors, the single gated write path, the LLM agent with fallbacks, and the Streamlit operator console. The three Round 1 demo scenarios are covered by automated tests.</p></div>
+    <div class="row"><h3>Offline model, rehearsal, packaging</h3><span class="pill part">Not verified</span>
+      <p><code>PLAN.md</code> lists the Ollama offline decision, the 90-second demo rehearsal, a clean database reset and submission packaging as open. I haven't checked any of them.</p></div>
+  </div>
+
+  <h2>Round 2 curveballs</h2>
+  <div class="grid">
+    <div class="row"><h3>U-5.1 Chlorine drop in Sector 2</h3><span class="pill todo">Pending</span>
+      <p>Only a chlorine range check on sensor <code>CL-S4</code> exists. Still needed: mark the sector non-compliant, remove it from tariff scheduling, and stage isolation and flushing through the gateway.</p></div>
+    <div class="row"><h3>U-5.2 Fire in Sector 6 (Civil Defence)</h3><span class="pill done">Done</span>
+      <p>Dynamic floor of 35% plus the committed fire volume, the scheduler recalculates against it, a UI panel, and its own tests. Committed.</p></div>
+    <div class="row"><h3>U-5.3 Valve order inside a work ticket</h3><span class="pill part">Partial</span>
+      <p>In place: text sanitiser (matches "pre-approved"), untrusted-data tagging of alert text, strict schemas that reject a <code>pre_approved</code> argument, and human approval in the gateway. Missing: a work-ticket feed, and a marker on staged actions saying they came from untrusted text.</p></div>
+    <div class="row"><h3>U-5.4 Approval reuse</h3><span class="pill todo">Pending</span>
+      <p>No approval tokens bound to action, valve, parameters and expiry, and none marked used. An approval row can't be approved twice, but nothing stops a replay for another valve.</p></div>
+    <div class="row"><h3>U-5.5 SCADA goes quiet</h3><span class="pill part">Partial</span>
+      <p>Per-sensor <code>STALE</code> detection (older than 10 minutes) exists. Missing: blocking new proposals while data is stale, pausing optimisation, a telemetry-loss alert, and re-validation when the feed returns.</p></div>
+  </div>
+
+  <h2>Round 1 stretch goals</h2>
+  <div class="grid">
+    <div class="row"><h3>Energy-water ROI dashboard</h3><span class="pill done">Done, uncommitted</span>
+      <p>Mission Control shows kWh banked, kWh blocked by the reserve floor, AED saved and leak waste. 19 tests pass. Not yet checked in a browser by me.</p></div>
+    <div class="row"><h3>Hydraulic simulation before a valve closure</h3><span class="pill done">Done, uncommitted</span>
+      <ul>
+        <li>Joukowsky surge check plus WNTR steady-state pressure. Falls back to plain Python if WNTR can't load.</li>
+        <li>Runs at staging and again at approval. A failure blocks the action.</li>
+        <li>Result shown on the approval card. 13 new tests, 100% coverage of the module.</li>
+        <li>Limit: WNTR gives steady-state pressure only. Surge is the Joukowsky estimate, not a transient simulation.</li>
+      </ul></div>
+    <div class="row"><h3>Maintenance work-order generator</h3><span class="pill todo">Pending</span>
+      <p>Not started. Plan: build orders from confirmed leak findings, ranked by litres per second lost.</p></div>
+    <div class="row"><h3>Any other advanced feature (our choice)</h3><span class="pill done">Done, uncommitted</span>
+      <p>Mission Control, the live replay page (network map, anomaly radar, agent feed, alarms, sensor matrix), is an extra beyond the three named goals. Built and tested; not yet checked in a browser by me or code-reviewed.</p></div>
+    <div class="row"><h3>Token-protected FastAPI operator API</h3><span class="pill todo">Pending, our own plan</span>
+      <p>Not in the organisers' brief. It's item S4 in our <code>PLAN.md</code> and the README roadmap, and it's optional. <code>fastapi</code> and <code>uvicorn</code> are already dependencies.</p></div>
+  </div>
+
+  <h2>Housekeeping before the demo</h2>
+  <div class="grid">
+    <div class="row"><h3>Commit the work</h3><span class="pill todo">Pending</span>
+      <p>The ROI work and the hydraulics check are uncommitted. Suggested: one commit for ROI and Mission Control, one for hydraulics, so each can be reviewed alone.</p></div>
+    <div class="row"><h3><code>/code-review</code> and <code>/security-scan</code></h3><span class="pill todo">Pending</span>
+      <p>Required by <code>CLAUDE.MD</code> after each stage and before the demo. The Mission Control page renders database content as HTML and script, so escaping deserves a close look.</p></div>
+    <div class="row"><h3>Docs</h3><span class="pill part">Partial</span>
+      <p>README now lists the ROI dashboard as built. It doesn't mention the hydraulics check yet. <code>PLAN.md</code> and <code>CLAUDE.MD</code> still call the ROI dashboard a stretch or dropped item.</p></div>
+  </div>
+
+  <h2>Environment notes</h2>
+  <div class="note">
+    Windows Application Control blocks launcher executables and some compiled files here. Run the app with the 3.12 venv:
+    <code>%USERPROFILE%\venvs\aquagrid312\Scripts\python.exe -m streamlit run app.py</code>. Always use <code>python -m</code>, never the bare <code>streamlit</code> command.
+    If the demo machine has a similar policy, WNTR may not load there, and the check will use its plain-Python fallback.
+  </div>
+
+  <footer>Written from the repository state on 21 Nov 2026; edit this file or ask for a refresh when things change.</footer>
+</main>
+</body>
+</html>
