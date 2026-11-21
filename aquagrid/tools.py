@@ -38,9 +38,12 @@ def _specs(conn: sqlite3.Connection) -> list[SensorSpec]:
                        neighbours=json.loads(r["neighbours_json"])) for r in conn.execute("SELECT * FROM sensors")]
 
 
-def analyze(conn: sqlite3.Connection) -> dict:
-    """Stage-2 pre-analysis in code: sensor health, leak-vs-fault per sector, intake trust, bloom."""
-    scenario, now = _scenario(conn), config.DEMO_NOW
+def analyze(conn: sqlite3.Connection, now: str | None = None, scenario: str | None = None) -> dict:
+    """Stage-2 pre-analysis in code: sensor health, leak-vs-fault per sector, intake trust, bloom.
+
+    now/scenario default to the live demo clock and the loaded scenario; Mission Control's replay passes
+    earlier minutes to see what the same guards concluded back then."""
+    scenario, now = scenario or _scenario(conn), now or config.DEMO_NOW
     specs = _specs(conn)
     series = _series(conn, scenario, [s.id for s in specs], None, now)
     last_ts = {r[0]: r[1] for r in conn.execute(

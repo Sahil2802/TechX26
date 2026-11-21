@@ -9,7 +9,6 @@ dependencies = [
     "openai",
     "python-dotenv",
     "httpx",
-    "streamlit",
     "pydantic>=2",
 ]
 
