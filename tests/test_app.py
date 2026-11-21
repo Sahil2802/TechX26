@@ -14,7 +14,7 @@ ISOLATE = json.dumps({"kind": "valve_position", "target_id": "V-S4-17-18", "targ
 @pytest.fixture(autouse=True)
 def no_token(monkeypatch):
     monkeypatch.setattr(config, "OPERATOR_TOKEN", None)
-    monkeypatch.setattr(web, "_last_run", None)
+    monkeypatch.setattr(web, "_last_run", {})
 
 
 @pytest.fixture
@@ -208,7 +208,7 @@ WRITES = [("/api/scenario", {"scenario": "baseline"}), ("/api/run", {"scenario":
 
 
 def snapshot(client):
-    s = client.get("/api/state").json()
+    s = client.get("/api/state", headers={"X-Operator-Token": "s3cret"}).json()
     return {k: s[k] for k in ("loaded", "fire", "valves", "actions", "run")}
 
 
@@ -226,11 +226,12 @@ def test_the_token_in_the_body_or_query_is_not_accepted(client, monkeypatch):
     assert client.post("/api/scenario?token=s3cret", json={"scenario": "baseline", "token": "s3cret"}).status_code == 401
 
 
-def test_write_endpoints_accept_the_header_token_and_reads_stay_open(client, monkeypatch):
+def test_write_endpoints_accept_the_header_token_and_reads_need_it(client, monkeypatch):
     monkeypatch.setattr(config, "OPERATOR_TOKEN", "s3cret")
-    assert client.get("/api/state").status_code == 200 and client.get("/api/health").json()["token_required"] is True
+    assert client.get("/api/state").status_code == 401 and client.get("/api/health").json()["token_required"] is True
+    assert client.get("/api/state", headers={"X-Operator-Token": "s3cret"}).status_code == 200
     ok = client.post("/api/scenario", json={"scenario": "baseline"}, headers={"X-Operator-Token": "s3cret"})
-    assert ok.status_code == 200 and client.get("/api/state").json()["loaded"] == "baseline"
+    assert ok.status_code == 200 and client.get("/api/state", headers={"X-Operator-Token": "s3cret"}).json()["loaded"] == "baseline"
 
 
 def test_health_reports_db_and_providers(client):
