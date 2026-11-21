@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AquaGrid Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>/*CSS*/</style></head>
+<body><div class="mc" id="root">
+  <header class="top">
+    <div class="brand">AQUAGRID <b>MISSION CONTROL</b></div>
+    <div class="scn" id="scn"></div>
+    <div class="pills">
+      <span class="pill" id="pSens"><i>●</i>SENSORS</span>
+      <span class="pill"><i>●</i>GUARDS ARMED</span>
+      <span class="pill"><i>●</i>LLM READ-ONLY</span>
+      <span class="pill"><i>●</i>WRITES NEED HUMAN</span>
+    </div>
+    <div class="ctl" role="group" aria-label="Replay controls">
+      <button class="btn" id="bPlay" aria-label="Play or pause">PAUSE</button>
+      <button class="btn" data-k="1" aria-pressed="false">1×</button>
+      <button class="btn" data-k="2" aria-pressed="true">2×</button>
+      <button class="btn" data-k="4" aria-pressed="false">4×</button>
+      <button class="btn" data-k="8" aria-pressed="false">8×</button>
+      <button class="btn" id="bRestart" aria-label="Restart replay">↺</button>
+    </div>
+    <div class="clock" id="clock" aria-live="off"></div>
+  </header>
+  <div class="banner" id="banner" data-s="nominal" role="status" aria-live="polite">
+    <span class="g" id="bG">●</span><span id="bT"></span><span class="cnt" id="bC"></span>
+  </div>
+  <main class="mid">
+    <section class="pn" aria-label="Network map"><h2>NETWORK · R1 → S1–S4<span id="mapSub"></span></h2>
+      <div class="body"><svg id="map" viewBox="0 0 640 400" role="img" aria-label="Live schematic of the water network"></svg></div></section>
+    <section class="pn" aria-label="Anomaly radar"><h2>ANOMALY RADAR<span id="radSub"></span></h2>
+      <div class="body"><canvas id="radar" role="img" aria-label="Radar of sensor anomalies"></canvas>
+        <div class="rlegend"><span><b>◆</b> leak · inner ring</span><span><b>▲</b> sensor fault · middle ring</span>
+        <span><b>■</b> security event · SYS wedge</span><span><b>•</b> nominal · outer ring</span></div></div></section>
+    <section class="pn" aria-label="Agent feed"><h2>AGENT FEED<span class="state" id="aState" data-s="mon"><i class="dot"></i><em id="aTxt" style="font-style:normal">MONITORING</em></span></h2>
+      <div class="cons" id="cons" role="log" aria-live="off"></div>
+      <div class="cfoot"><span>replay: CODE facts, templated agent narration</span><span>tools: 2 read · 1 gated write</span></div></section>
+  </main>
+  <section class="low">
+    <section class="pn" aria-label="Energy-water ROI"><h2>ENERGY–WATER ROI · PEAK <span id="roiWin"></span></h2>
+      <div class="roi" id="roi"></div></section>
+    <section class="pn" aria-label="Active alarms"><h2>ALARM LIST<span id="almSub"></span></h2>
+      <div class="body"><div class="scroll" id="alm"></div></div></section>
+    <section class="pn" aria-label="Sensor matrix"><h2>SENSOR MATRIX<span id="mxSub"></span></h2>
+      <div class="mx" id="mx"></div></section>
+  </section>
+  <footer class="scrub">
+    <div class="row"><div class="track" id="track"><svg id="spark" preserveAspectRatio="none"></svg><div id="mks"></div><div class="play" id="playhead"></div>
+      <input id="rng" type="range" min="0" max="120" step="1" value="15" aria-label="Replay position"></div></div>
+    <div class="hint"><span>R1 reservoir level vs effective floor · markers: alerts, quarantines, leak, veto</span><span>space = play/pause · ←/→ = ±1 min</span></div>
+  </footer>
+</div>
+<script type="application/json" id="data">/*DATA*/</script>
+<script>/*JS*/</script>
+</body></html>

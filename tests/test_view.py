@@ -113,3 +113,14 @@ def test_guard_rows_list_every_check(db):
     assert res.status == "PENDING_APPROVAL"
     assert [r["Check"] for r in rows] == ["allowlist", "range", "leak_backing", "connectivity", "single_pending"]
     assert {r["Result"] for r in rows} == {"PASS"}
+
+
+def test_approval_popup_lists_pending_ids_and_targets_the_gate():
+    html = view.approval_popup_html([3, 7])
+    assert "#3, #7" in html and "2 actions waiting" in html
+    assert view.GATE_ANCHOR_ID in html and view.TAB_LABEL in html and "scrollIntoView" in html
+
+
+def test_approval_popup_with_nothing_pending_only_clears_the_old_one():
+    html = view.approval_popup_html([])
+    assert "if (0 === 0) return;" in html and "remove()" in html

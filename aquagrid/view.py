@@ -157,3 +157,52 @@ def trace_rows(run_id: str) -> list[dict]:
     return [{"#": i, "Who": actor_badge(r["actor"]), "Step": f"{r['stage']}/{r['event']}",
              "Detail": _clip(describe_event(r["stage"], r["event"], json.loads(r["payload_json"])))}
             for i, r in enumerate(rows, 1)]
+
+
+GATE_ANCHOR_ID = "human-gate-anchor"
+TAB_LABEL = "Action required"  # app.py names the gate's tab with this text; the popup finds the tab by it
+_POPUP_ID = "aquagrid-approval-popup"
+
+
+def approval_popup_html(pending_ids: list[int]) -> str:
+    """A floating 'human approval needed' notice; clicking it scrolls to the approval gate.
+
+    One script, always rendered: with nothing pending it removes any popup left from an earlier run.
+    Ids are ints from our own database, never free text, so nothing here is user-controlled markup.
+    """
+    ids = [int(i) for i in pending_ids]
+    n = len(ids)
+    label = f"Human approval needed: {n} action{'s' if n != 1 else ''} waiting (#{', #'.join(map(str, ids))})"
+    return f"""<script>
+(function () {{
+  var old = document.getElementById("{_POPUP_ID}");
+  if (old) old.remove();
+  if ({n} === 0) return;
+  var box = document.createElement("div");
+  box.id = "{_POPUP_ID}";
+  box.setAttribute("role", "alert");
+  box.style.cssText = "position:fixed;top:70px;right:20px;z-index:999999;max-width:360px;padding:12px 14px;"
+    + "border-radius:10px;background:#b45309;color:#fffbeb;font:600 14px sans-serif;cursor:pointer;"
+    + "box-shadow:0 6px 24px rgba(0,0,0,.35);display:flex;gap:10px;align-items:center";
+  var text = document.createElement("span");
+  text.textContent = "\\uD83D\\uDD14 {label} \\u2014 click to review";
+  var close = document.createElement("button");
+  close.textContent = "\\u00D7";
+  close.setAttribute("aria-label", "Dismiss");
+  close.style.cssText = "background:none;border:0;color:inherit;font-size:20px;cursor:pointer;margin-left:auto";
+  close.onclick = function (e) {{ e.stopPropagation(); box.remove(); }};
+  box.onclick = function () {{
+    var tabs = document.querySelectorAll('button[role="tab"]');
+    for (var i = 0; i < tabs.length; i++) {{
+      if (tabs[i].textContent.indexOf("{TAB_LABEL}") !== -1) {{ tabs[i].click(); break; }}
+    }}
+    setTimeout(function () {{  // let the tab panel become visible before scrolling to the gate
+      var gate = document.getElementById("{GATE_ANCHOR_ID}");
+      if (gate) gate.scrollIntoView({{behavior: "smooth", block: "start"}});
+    }}, 150);
+    box.remove();
+  }};
+  box.append(text, close);
+  document.body.appendChild(box);
+}})();
+</script>"""
