@@ -2,10 +2,10 @@ import { useState } from 'react'
 import * as sfx from './sfx'
 import type { PlantInfo, State } from './types'
 
-export type Tab = 'overview' | 'telemetry' | 'approvals' | 'log'
+export type Tab = 'overview' | 'telemetry' | 'approvals' | 'curveballs' | 'log'
 
 const TABS: [Tab, string][] = [
-  ['overview', 'Overview'], ['telemetry', 'Telemetry'], ['approvals', 'Approvals'], ['log', 'Decision log'],
+  ['overview', 'Overview'], ['telemetry', 'Telemetry'], ['approvals', 'Approvals'], ['curveballs', 'Curveballs'], ['log', 'Decision log'],
 ]
 
 interface TopBarProps {

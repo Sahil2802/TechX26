@@ -60,9 +60,19 @@ export interface Action {
   approver: string | null
   note: string | null
   guard_rows: GuardRow[]
+  provenance?: string
+  from_untrusted_text?: boolean
+  approval_token?: string | null
 }
 
 export interface TraceRow { '#': number; Who: string; Step: string; Detail: string }
+
+export interface AgentInfo {
+  run_id: string | null
+  status: string
+  steps: number
+  blocked: number
+}
 
 export interface Run {
   run_id: string
@@ -73,6 +83,51 @@ export interface Run {
   blocked_attempts: number
   brief_md: string
   trace: TraceRow[]
+  agents?: {
+    sensor_guard?: AgentInfo
+    grid_optimizer?: AgentInfo
+    security_sentinel?: AgentInfo
+  }
+}
+
+export interface ChlorineStatus {
+  sector: string
+  value: number | null
+  compliant: boolean
+  floor: number
+}
+
+export interface ScadaStatus {
+  stale: boolean
+  telemetry_loss: boolean
+}
+
+export interface ApprovalToken {
+  token: string
+  action_id: number
+  action_type: string
+  target_id: string
+  target_value: number
+  created_ts: string
+  expires_ts: string
+  used_ts: string | null
+  used_by: string | null
+  status: 'ACTIVE' | 'USED' | 'EXPIRED' | 'REVOKED'
+}
+
+export interface WorkTicket {
+  ticket_id: string
+  ts: string
+  assigned_to: string
+  details: string
+  flags: string[]
+}
+
+export interface CurveballState {
+  chlorine: ChlorineStatus
+  scada: ScadaStatus
+  tokens: ApprovalToken[]
+  tickets: WorkTicket[]
 }
 
 export interface State {
@@ -98,6 +153,7 @@ export interface State {
   plant: string
   plants: PlantInfo[]
   role: 'admin' | 'plant'
+  curveballs?: CurveballState
 }
 
 export interface PlantInfo { id: string; name: string }

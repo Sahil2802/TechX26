@@ -1,5 +1,6 @@
 """The operator console backend, driven through its HTTP API the way the web page uses it."""
 import json
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -23,11 +24,15 @@ def client(db):
 
 
 def scripted_llm(monkeypatch, *proposals):
-    """Replace the real LLM chain with a model that reads once, makes `proposals`, then answers."""
-    steps = iter([("read_tariff_and_quality_feeds", "{}"), *[("propose_action", p) for p in proposals]])
+    """Replace the real LLM chain with a model that reads once, makes `proposals`, then answers.
+    The swarm runs its agents on separate threads, so each thread replays its own copy of the script."""
+    script = [("read_tariff_and_quality_feeds", "{}"), *[("propose_action", p) for p in proposals]]
+    per_thread = threading.local()
 
     def fake(messages, tools_):
-        step = next(steps, None)
+        if not hasattr(per_thread, "steps"):
+            per_thread.steps = iter(script)
+        step = next(per_thread.steps, None)
         if step is None:
             return SimpleNamespace(content="## Situation\nScripted brief.", tool_calls=None), "fake/model"
         return SimpleNamespace(content=None, tool_calls=[SimpleNamespace(
@@ -96,7 +101,7 @@ def test_nothing_moves_until_a_human_approves_then_approve_executes(client, monk
     scripted_llm(monkeypatch, THROTTLE, ISOLATE)
     s = run_agent(client)
     assert valve() == 100 and len(pending(s)) == 1  # the throttle was vetoed, the isolation is waiting
-    assert s["run"]["provider"] == "fake/model"
+    assert s["run"]["provider"] == "multi-agent swarm"  # /api/run runs the three-agent swarm
     r = decide(client, pending(s)[0]["id"], "approve")
     assert r.status_code == 200 and "EXECUTED by alice" in r.json()["message"]
     assert valve() == 0 and not pending(client.get("/api/state").json())
@@ -146,7 +151,7 @@ def test_deciding_an_unknown_or_already_decided_action_is_a_clean_error(client, 
 def test_the_scripted_attacker_cannot_move_anything_and_shows_in_the_trace(client):
     s = run_agent(client, "attack", scripted=True)
     assert valve("V-S4-IN") == 100 and valve() == 100 and not pending(s)
-    assert s["run"]["blocked_attempts"] == 2
+    assert s["run"]["blocked_attempts"] >= 2  # summed over the swarm; every attempt is still blocked
     whos = {r["Who"] for r in s["run"]["trace"]}
     assert {"ATTACKER", "CODE"} <= whos
     assert any("unknown tool" in r["Detail"] for r in s["run"]["trace"])
@@ -242,8 +247,8 @@ def test_health_reports_db_and_providers(client):
 def test_actions_endpoint_is_the_approval_queue(client, monkeypatch):
     scripted_llm(monkeypatch, ISOLATE)
     s = run_agent(client)
-    run_id = s["run"]["run_id"]
     queue = client.get("/api/actions", params={"status": "PENDING_APPROVAL"}).json()
+    run_id = queue[0]["run_id"]  # actions carry the id of the specialist agent run that proposed them
     assert [a["target_id"] for a in queue] == ["V-S4-17-18"] and queue[0]["guard_rows"]
     assert len(client.get("/api/actions", params={"run_id": run_id}).json()) == 1
     assert client.get("/api/actions", params={"run_id": "nope"}).json() == []
@@ -251,7 +256,8 @@ def test_actions_endpoint_is_the_approval_queue(client, monkeypatch):
 
 def test_run_and_trace_endpoints(client, monkeypatch):
     scripted_llm(monkeypatch, ISOLATE)
-    run_id = run_agent(client)["run"]["run_id"]
+    run_agent(client)
+    run_id = client.get("/api/actions", params={"status": "PENDING_APPROVAL"}).json()[0]["run_id"]
     run = client.get(f"/api/runs/{run_id}").json()
     assert run["run_id"] == run_id and run["scenario"] == "peak_2pm" and len(run["actions"]) == 1
     trace = client.get(f"/api/runs/{run_id}/trace").json()

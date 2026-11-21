@@ -126,3 +126,5 @@ iframe.mission { position: relative; display: block; width: 100%; min-width: 118
 .plant-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
 .plant-cards button { text-align: left; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
 .plant-switch { flex-direction: row; align-items: center; gap: 6px; }
+
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }

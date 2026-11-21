@@ -134,7 +134,8 @@ def test_plant_files_stay_isolated(plant_b):
     dbm.set_plant("A")
     conn = dbm.connect(ro=True)
     assert conn.execute("SELECT id FROM plant").fetchone()[0] == "PLANT-1"
-    assert conn.execute("SELECT count(*) FROM telemetry WHERE sensor_id='CL-S2'").fetchone()[0] == 0
+    # plant A keeps its own healthy CL-S2 (curveball sensor); plant B's drifting CL-S2 must not leak into it
+    assert conn.execute("SELECT min(value) FROM telemetry WHERE sensor_id='CL-S2' AND scenario='peak_2pm'").fetchone()[0] > 0.7
     assert conn.execute("SELECT count(*) FROM actions").fetchone()[0] == 0
     conn.close()
 

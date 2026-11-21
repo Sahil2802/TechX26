@@ -12,3 +12,5 @@ data/
 __pycache__/
 PRODUCT.md
 .pytest_cache/
+!README.md
+*.md

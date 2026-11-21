@@ -23,7 +23,8 @@ CREATE TABLE quality_alerts(scenario TEXT, ts TEXT, source TEXT, kind TEXT, seve
 CREATE TABLE actions(
   id INTEGER PRIMARY KEY AUTOINCREMENT, run_id TEXT, kind TEXT, target_id TEXT,
   from_value REAL, to_value REAL, rationale TEXT, proposed_by TEXT, status TEXT,
-  guard_json TEXT, sim_json TEXT, approver TEXT, note TEXT, created_ts TEXT, decided_ts TEXT);
+  guard_json TEXT, sim_json TEXT, approver TEXT, note TEXT, created_ts TEXT, decided_ts TEXT,
+  provenance TEXT DEFAULT 'agent', from_untrusted_text INTEGER DEFAULT 0, approval_token TEXT);
 CREATE TABLE runs(run_id TEXT PRIMARY KEY, scenario TEXT, started_ts TEXT, status TEXT,
   provider TEXT, steps INTEGER, replans INTEGER);
 CREATE TABLE audit_log(id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT, run_id TEXT, stage TEXT,
@@ -38,6 +39,26 @@ CREATE TABLE IF NOT EXISTS fire_reserves(
   note TEXT
 );
 INSERT OR IGNORE INTO fire_reserves(id, volume_m3, sector, requester) VALUES(1, 0, 'S6', 'Civil Defence');
+CREATE TABLE IF NOT EXISTS approval_tokens(
+  token TEXT PRIMARY KEY,
+  action_id INTEGER NOT NULL,
+  action_type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  target_value REAL NOT NULL,
+  created_ts TEXT NOT NULL,
+  expires_ts TEXT NOT NULL,
+  used_ts TEXT,
+  used_by TEXT,
+  status TEXT DEFAULT 'ACTIVE'
+);
+CREATE TABLE IF NOT EXISTS work_tickets(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  scenario TEXT,
+  ts TEXT,
+  ticket_id TEXT,
+  assigned_to TEXT,
+  details TEXT
+);
 """
 
 
@@ -114,7 +135,72 @@ def migrate(conn: sqlite3.Connection) -> None:
         );
         INSERT OR IGNORE INTO fire_reserves(id, volume_m3, sector, requester)
           VALUES(1, 0, 'S6', 'Civil Defence');
+        CREATE TABLE IF NOT EXISTS approval_tokens(
+          token TEXT PRIMARY KEY,
+          action_id INTEGER NOT NULL,
+          action_type TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          target_value REAL NOT NULL,
+          created_ts TEXT NOT NULL,
+          expires_ts TEXT NOT NULL,
+          used_ts TEXT,
+          used_by TEXT,
+          status TEXT DEFAULT 'ACTIVE'
+        );
+        CREATE TABLE IF NOT EXISTS work_tickets(
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          scenario TEXT,
+          ts TEXT,
+          ticket_id TEXT,
+          assigned_to TEXT,
+          details TEXT
+        );
     """)
+    for col, ctype in (("provenance", "TEXT DEFAULT 'agent'"),
+                       ("from_untrusted_text", "INTEGER DEFAULT 0"),
+                       ("approval_token", "TEXT")):
+        try:
+            conn.execute(f"ALTER TABLE actions ADD COLUMN {col} {ctype}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+
+
+def create_approval_token(conn: sqlite3.Connection, token: str, action_id: int, action_type: str,
+                          target_id: str, target_value: float, created_ts: str, expires_ts: str) -> None:
+    conn.execute(
+        "INSERT INTO approval_tokens(token, action_id, action_type, target_id, target_value, created_ts, expires_ts) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (token, action_id, action_type, target_id, target_value, created_ts, expires_ts))
+
+
+def get_approval_token(conn: sqlite3.Connection, token: str) -> dict | None:
+    row = conn.execute("SELECT * FROM approval_tokens WHERE token=?", (token,)).fetchone()
+    return dict(row) if row else None
+
+
+def use_approval_token(conn: sqlite3.Connection, token: str, used_by: str, used_ts: str) -> None:
+    conn.execute("UPDATE approval_tokens SET used_ts=?, used_by=?, status='USED' WHERE token=?",
+                 (used_ts, used_by, token))
+
+
+def list_approval_tokens(conn: sqlite3.Connection) -> list[dict]:
+    return [dict(r) for r in conn.execute("SELECT * FROM approval_tokens ORDER BY created_ts DESC").fetchall()]
+
+
+def add_work_ticket(conn: sqlite3.Connection, scenario: str, ts: str, ticket_id: str,
+                    assigned_to: str, details: str) -> None:
+    conn.execute(
+        "INSERT INTO work_tickets(scenario, ts, ticket_id, assigned_to, details) VALUES (?,?,?,?,?)",
+        (scenario, ts, ticket_id, assigned_to, details))
+
+
+def get_work_tickets(conn: sqlite3.Connection, scenario: str, until_ts: str | None = None) -> list[dict]:
+    sql = "SELECT * FROM work_tickets WHERE scenario=?"
+    args = [scenario]
+    if until_ts:
+        sql += " AND ts<=?"
+        args.append(until_ts)
+    return [dict(r) for r in conn.execute(sql + " ORDER BY ts", args).fetchall()]
 
 
 def get_fire_reserve(conn: sqlite3.Connection) -> dict:

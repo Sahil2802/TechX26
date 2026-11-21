@@ -3,7 +3,7 @@ import * as api from './api'
 import * as sfx from './sfx'
 import { Login, type Session } from './Login'
 import { ApprovalGate, RunPanel } from './Gate'
-import { Findings, MetricCards, ReservoirChart, ScheduleSection, SensorsPanel } from './Panels'
+import { CurveballShowcase, Findings, MetricCards, ReservoirChart, ScheduleSection, SensorsPanel } from './Panels'
 import { ApprovalBanner } from './Popup'
 import { Hero, HeroVideo, Rail, TopBar, type Tab } from './ShellParts'
 import type { DecideResult, State, Verb } from './types'
@@ -143,6 +143,11 @@ export default function App() {
         plant={state.plant} plants={state.plants} admin={session.role === 'admin'} onPlant={switchPlant} />
       <Hero levelPct={state.metrics.level_pct} floorPct={state.metrics.floor_pct} band={state.metrics.band} pending={pending.length} />
       <ApprovalBanner ids={pending.map((a) => a.id)} onOpen={() => setTab('approvals')} />
+      {state.curveballs?.scada?.stale && (
+        <div className="alert a-error" role="alert">
+          ⚠️ <b>SCADA TELEMETRY LOSS ACTIVE (&gt;10 min quiet):</b> All setpoint and valve proposals are BLOCKED by Python guards. Tariff optimization is paused, and the network is held at safe baseline production.
+        </div>
+      )}
       <div className="shell">
         <Rail
           state={state} scenario={scenario} busy={busy} scripted={scripted}
@@ -164,7 +169,7 @@ export default function App() {
             </div>
             <p className="mut">Read-only replay of the selected scenario, 12:00-14:00. Every figure is computed by the guards; the agent feed
               narrates it. Pick a scenario and Run agent on the left, then decide in Approvals.</p>
-            <MetricCards m={state.metrics} fireM3={state.fire.volume_m3} />
+            <MetricCards m={state.metrics} fireM3={state.fire.volume_m3} cb={state.curveballs} />
             <div className="cols">
               <section><h2>Sensors</h2><SensorsPanel sensors={state.sensors} valves={state.valves} /></section>
               <section><h2>Reservoir</h2><ReservoirChart s={state} /></section>
@@ -185,7 +190,12 @@ export default function App() {
             <h2>Human approval gate</h2>
             <ApprovalGate actions={state.actions} disabled={busy}
               demoLeak={state.demo_leak} onStageDemo={() => act(api.stageDemo)}
-              onDecide={(id, verb: Verb, operator, note) => act(() => api.decide(id, verb, operator, note))} />
+              onStageIsolationFlush={() => act(api.stageIsolationFlush)}
+              onDecide={(id, verb: Verb, operator, note, tok) => act(() => api.decide(id, verb, operator, note, tok))} />
+          </div>
+
+          <div hidden={tab !== 'curveballs'}>
+            <CurveballShowcase state={state} disabled={busy} onRefresh={refresh} toast={toast} />
           </div>
 
           <div hidden={tab !== 'log'}>
@@ -195,6 +205,7 @@ export default function App() {
           </div>
         </main>
       </div>
+
       <Toasts toasts={toasts} />
     </div>
   )

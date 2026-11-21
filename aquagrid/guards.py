@@ -14,11 +14,23 @@ _INJECTION_PATTERNS = {
     "approval_field": r"approved\s*=",
     "pre_approved": r"pre-?approved",
     "action_command": r"\b(execute|close|open|set)\b.{0,40}(\bvalve\b|\bV-[A-Z0-9-]+|\bPLANT-\w+)",
+    "close_order": r"\b(close|open|shut|isolate|operate)\s+(V-[A-Z0-9-]+|\bvalve\b)",
+    "supervisor_approval": r"approved\s+by\s+supervisor|supervisor\s+approval",
+    "emergency_order": r"\b(immediately|urgent|emergency\s+order)\b",
     "role_change": r"you\s+are\s+now",
     "code_fence": r"```",
     "tool_name": r"stage_gated_valve_or_setpoint_action|propose_action|execute_valve|run_sql",
 }
 _COMPILED = {name: re.compile(p, re.IGNORECASE) for name, p in _INJECTION_PATTERNS.items()}
+
+
+def is_untrusted_text(text: str) -> tuple[bool, list[str]]:
+    """Return (True, flags) if text matches any prompt-injection or unauthorized instruction pattern."""
+    flags: list[str] = []
+    for name, rx in _COMPILED.items():
+        if rx.search(text):
+            flags.append(name)
+    return bool(flags), flags
 
 
 def sanitize_text(text: str) -> tuple[str, list[str]]:
@@ -250,6 +262,13 @@ def _project_peak(state: dict, production_m3h: float) -> list[float]:
 
 def check_setpoint(req: ActionRequest, state: dict) -> GuardReport:
     plant, value = state["plant"], req.target_value
+    scada_stale = state.get("scada_stale", False)
+    if scada_stale:
+        return _report([
+            _check("telemetry_freshness", False,
+                   "SCADA telemetry quiet (>10 min loss). Proposing setpoint changes is blocked while data is stale. Holding last safe state.")
+        ])
+
     fire_reserve_m3 = state.get("fire_reserve_m3", 0.0)
     capacity_m3 = state.get("reservoir", {}).get("capacity_m3", config.RESERVOIR_CAPACITY_M3)
     floor = effective_floor(state["bloom_active"], state["intake_trusted"],
@@ -265,10 +284,20 @@ def check_setpoint(req: ActionRequest, state: dict) -> GuardReport:
     levels = _project_peak(state, value)
     low, high = min(levels), max(levels)
     risky = value > plant["setpoint_m3h"] and (state["bloom_active"] or not state["intake_trusted"])
+
+    # U-5.1: Water-quality floor in Python (Sector 2 chlorine residual < 0.2 mg/L)
+    cl_s2 = state.get("cl_s2")
+    cl_s2_ok = cl_s2 is None or cl_s2 >= config.CHLORINE_MIN_MGL
+    non_compliant = state.get("non_compliant_sectors", [])
+    if not cl_s2_ok and "S2" not in non_compliant:
+        non_compliant = [*non_compliant, "S2"]
+    quality_floor_ok = not non_compliant
+
     chlorine = state.get("cl_s4")
     cl_id = profiles.get().chlorine_sensor
     chlorine_ok = chlorine is None or config.CHLORINE_MIN_MGL <= chlorine <= config.CHLORINE_MAX_MGL
-    return _report([
+
+    checks = [
         _check("bounds", plant["min_m3h"] <= value <= plant["max_m3h"],
                f"setpoint {value:.0f} m3/h vs plant limits [{plant['min_m3h']:.0f}, {plant['max_m3h']:.0f}]", value),
         _check("reserve_floor", low >= floor,
@@ -281,10 +310,24 @@ def check_setpoint(req: ActionRequest, state: dict) -> GuardReport:
                else "refusing to raise intake while a bloom is active or intake quality is untrusted"),
         _check("chlorine", chlorine_ok,
                f"{cl_id} chlorine in range" if chlorine_ok else f"{cl_id} chlorine {chlorine} mg/L out of range", chlorine),
-    ])
+    ]
+    if not quality_floor_ok:
+        checks.append(_check("water_quality_floor", False,
+                             f"Water quality floor violation: Sector {', '.join(non_compliant)} non-compliant "
+                             f"(chlorine < {config.CHLORINE_MIN_MGL:.1f} mg/L floor). Water quality outranks tariff savings; "
+                             f"tariff-driven setpoint changes are blocked.",
+                             cl_s2, config.CHLORINE_MIN_MGL))
+    return _report(checks)
 
 
 def check_valve(req: ActionRequest, state: dict) -> GuardReport:
+    scada_stale = state.get("scada_stale", False)
+    if scada_stale:
+        return _report([
+            _check("telemetry_freshness", False,
+                   "SCADA telemetry quiet (>10 min loss). Proposing valve changes is blocked while data is stale. Holding last safe state.")
+        ])
+
     vid, value = req.target_id, req.target_value
     known = vid in state["valves"]
     checks = [_check("allowlist", known, f"{vid} is {'a known' if known else 'NOT a known'} valve"),
@@ -293,8 +336,13 @@ def check_valve(req: ActionRequest, state: dict) -> GuardReport:
         return _report(checks)
     pipe = state["valve_pipe"][vid]
     if value < state["valves"][vid]:  # closing or throttling
-        backed = any(f.verdict == "GENUINE_LEAK" and f.suspected_pipe == pipe for f in state["leak_findings"])
-        checks.append(_check("leak_backing", backed, f"{pipe} is {'the' if backed else 'NOT a'} confirmed genuine-leak segment"))
+        # Backed if genuine leak OR water-quality non-compliance requiring isolation
+        leak_backed = any(f.verdict == "GENUINE_LEAK" and f.suspected_pipe == pipe for f in state["leak_findings"])
+        quality_backed = (pipe == "P-S2-IN" and (state.get("cl_s2") is not None and state["cl_s2"] < config.CHLORINE_MIN_MGL
+                                                 or "S2" in state.get("non_compliant_sectors", [])))
+        backed = leak_backed or quality_backed
+        checks.append(_check("leak_backing", backed,
+                             f"{pipe} is {'the' if backed else 'NOT a'} confirmed genuine-leak or quality-isolation segment"))
         closed = {state["valve_pipe"][k] for k, pos in state["valves"].items() if pos <= 0}
         ok, unreachable = connectivity_ok(state["pipes"], closed | ({pipe} if value <= 0 else set()))
         checks.append(_check("connectivity", ok, "critical nodes stay supplied" if ok
@@ -305,5 +353,38 @@ def check_valve(req: ActionRequest, state: dict) -> GuardReport:
     return _report(checks)
 
 
+def check_isolation_and_flush(req: ActionRequest, state: dict) -> GuardReport:
+    """U-5.1: Dedicated guard for isolation and flush actions staged through the gated write path."""
+    scada_stale = state.get("scada_stale", False)
+    if scada_stale:
+        return _report([
+            _check("telemetry_freshness", False,
+                   "SCADA telemetry quiet (>10 min loss). Proposing isolation/flush is blocked while data is stale.")
+        ])
+    target = req.target_id
+    valid_targets = {"S2", "SECTOR-2", "V-S2-IN"}
+    is_valid = target in valid_targets or target in state.get("valves", {})
+    checks = [_check("allowlist", is_valid, f"{target} is a valid sector or valve target for isolation/flush")]
+    if not is_valid:
+        return _report(checks)
+
+    # Water-quality breach justification
+    cl_s2 = state.get("cl_s2")
+    has_breach = (cl_s2 is not None and cl_s2 < config.CHLORINE_MIN_MGL) or ("S2" in state.get("non_compliant_sectors", []))
+    checks.append(_check("quality_floor", has_breach,
+                         f"Sector 2 chlorine residual {cl_s2 if cl_s2 is not None else 0.0:.2f} mg/L < {config.CHLORINE_MIN_MGL:.1f} mg/L floor justifies isolation and flushing"
+                         if has_breach else "no active water-quality breach justifies emergency isolation/flush"))
+
+    # Connectivity to critical nodes
+    pipe = "P-S2-IN"
+    closed = {state["valve_pipe"][k] for k, pos in state["valves"].items() if pos <= 0}
+    ok, unreachable = connectivity_ok(state["pipes"], closed | {pipe})
+    checks.append(_check("connectivity", ok, "critical nodes (hospital J19) stay supplied" if ok
+                         else f"would cut supply to critical node(s) {', '.join(unreachable)}"))
+    return _report(checks)
+
+
 def evaluate_action(req: ActionRequest, state: dict) -> GuardReport:
+    if req.kind == "isolation_and_flush":
+        return check_isolation_and_flush(req, state)
     return check_valve(req, state) if req.kind == "valve_position" else check_setpoint(req, state)

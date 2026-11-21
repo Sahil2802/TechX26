@@ -6,6 +6,7 @@ const $ = id => document.getElementById(id);
 const NS = 'http://www.w3.org/2000/svg';
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const F = D.first, L = D.last, N = D.times.length;
+let updateCurveball = null;
 const frameAt = m => D.frames[Math.max(F, Math.min(L, m)) - F];
 const fmt = n => Math.round(n).toLocaleString('en-US');
 const pad2 = n => String(n).padStart(2, '0');
@@ -14,7 +15,7 @@ const h = (tag, cls, text, parent) => { const e = document.createElement(tag); i
 const s = (tag, attrs, parent, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; };
 const spec = Object.fromEntries(D.specs.map(x => [x.id, x]));
 const base = Object.fromEntries(Object.entries(D.series).map(([k, v]) => [k, mean(v.slice(0, 60))]));
-const val = (id, m) => D.series[id][Math.max(0, Math.min(N - 1, m))];
+const val = (id, m) => { const arr = D.series[id]; return (arr && arr.length) ? arr[Math.max(0, Math.min(arr.length - 1, m))] : 0; };
 const run = D.run || [];
 const runBlocked = run.filter(r => /BLOCKED$/.test(r.Step)), runRejected = run.filter(r => /REJECTED_BY_GUARD$/.test(r.Step));
 
@@ -29,6 +30,12 @@ function alarmsOf(fr, m) {
   D.alerts.forEach((a, i) => { if (a.flags.length && m >= a.m) out.push({ key: 'I' + i, rank: 4, g: '■', tag: 'ALERT TEXT', text: 'prompt injection redacted [' + a.flags.join(', ') + ']' }); });
   if (m >= L && runBlocked.length) out.push({ key: 'RB', rank: 4, g: '■', tag: 'GATEWAY', text: runBlocked.length + ' bypass attempt(s) BLOCKED, nothing stored' });
   if (m >= L && runRejected.length) out.push({ key: 'RR', rank: 4, g: '■', tag: 'GUARD', text: runRejected.length + ' proposal(s) REJECTED_BY_GUARD' });
+  if (D.curveball && m >= D.curveball.trigger_minute) {
+    out.push({
+      key: 'CB', rank: 4, g: '■', tag: D.curveball.id,
+      text: D.curveball.title + ' · ' + (D.curveball.what_happened.length > 70 ? D.curveball.what_happened.slice(0, 70) + '…' : D.curveball.what_happened)
+    });
+  }
   return out;
 }
 const firstSeen = {};
@@ -37,6 +44,10 @@ for (let m = F; m <= L; m++) for (const a of alarmsOf(frameAt(m), m)) if (!(a.ke
 // ---------- header ----------
 $('scn').textContent = '';
 $('scn').append('SCENARIO ', Object.assign(h('b'), { textContent: D.scenario }), ' · ' + D.name);
+if (D.curveball) {
+  const cbBadge = h('span', null, '🎯 ' + D.curveball.id + ' MODE', $('scn'));
+  cbBadge.style.cssText = 'margin-left:8px;background:' + D.curveball.color + '22;color:' + D.curveball.color + ';border:1px solid ' + D.curveball.color + '66;border-radius:3px;padding:1px 6px;font:600 10px var(--mono)';
+}
 $('roiWin').textContent = pad2(D.peak[0]) + ':00–' + pad2(D.peak[1]) + ':00';
 
 // ---------- map ----------
@@ -126,6 +137,15 @@ function updateMap(m) {
     s('rect', { x: tx, y: ty2, width: w, height: 14 }, g);
     s('text', { x: tx + 5, y: ty2 + 10.5 }, g, label);
   });
+  if (D.curveball && m >= D.curveball.trigger_minute && D.curveball.tag_node && POS[D.curveball.tag_node]) {
+    const [x, y] = POS[D.curveball.tag_node];
+    const label = D.curveball.id + '  ' + (D.curveball.tag_label || 'ACTIVE');
+    const w = label.length * 6 + 12, tx = Math.max(4, Math.min(640 - w - 4, x - w / 2)), ty2 = y - 34;
+    const g = s('g', { class: 'tag ' + (D.curveball.banner_kind === 'security' ? 'alarm' : 'warn') }, gTags);
+    s('line', { x1: x, y1: y - 9, x2: x, y2: ty2 + 14 }, g);
+    s('rect', { x: tx, y: ty2, width: w, height: 14 }, g);
+    s('text', { x: tx + 5, y: ty2 + 10.5 }, g, label);
+  }
 }
 
 // ---------- radar ----------
@@ -322,14 +342,32 @@ function updateBanner(m) {
     if (fr.bloom) parts.push('ALGAL BLOOM · FLOOR ' + fr.floor.toFixed(0) + '%');
     msg = 'ADVISORY · ' + parts.join(' · ');
   }
-  if (kind === 'alarm') { g = '◆'; const lk = Object.values(fr.sectors).find(f => f.v === 'GENUINE_LEAK'); msg = 'ALARM · LEAK ' + lk.pipe + ' · ISOLATE ' + lk.valve + ' · AWAITING OPERATOR APPROVAL'; }
-  if (kind === 'security') { g = '■'; msg = 'SECURITY ALERT · PROMPT INJECTION DETECTED · UNTRUSTED TEXT REDACTED · WRITES LOCKED TO HUMAN APPROVAL'; }
+  if (kind === 'alarm') {
+    g = '◆';
+    const lk = Object.values(fr.sectors).find(f => f.v === 'GENUINE_LEAK');
+    msg = lk ? ('ALARM · LEAK ' + lk.pipe + ' · ISOLATE ' + lk.valve + ' · AWAITING OPERATOR APPROVAL') : 'ALARM · SYSTEM ALERT ACTIVE';
+  }
+  if (kind === 'security') {
+    g = '■';
+    msg = 'SECURITY ALERT · PROMPT INJECTION DETECTED · UNTRUSTED TEXT REDACTED · WRITES LOCKED TO HUMAN APPROVAL';
+  }
+  let shown = kind;
+  if (D.curveball && m >= D.curveball.trigger_minute) {
+    shown = D.curveball.banner_kind || 'security';
+    g = D.curveball.banner_glyph || (shown === 'security' ? '■' : '◆');
+    msg = D.curveball.banner_msg || (D.curveball.id + ' · ' + D.curveball.title.toUpperCase());
+  }
+  b.dataset.s = shown;
+  document.body.classList.toggle('attack', shown === 'security');
   // Ask the parent console (which owns the audio + mute switch) to sound the severity change.
-  if (lastKind !== undefined && lastKind !== kind) { try { parent.postMessage({ aquagridSfx: kind === 'nominal' ? 'clear' : kind }, '*'); } catch (e) { /* standalone page */ } }
-  lastKind = kind;
-  b.dataset.s = kind; $('bG').textContent = g; $('bT').textContent = msg;
-  $('bC').textContent = nFault + ' fault · ' + nLeak + ' leak · ' + al.filter(a => a.rank === 4).length + ' security · floor ' + fr.floor.toFixed(0) + '%';
-  document.body.classList.toggle('attack', kind === 'security');
+  if (lastKind !== undefined && lastKind !== shown) { try { parent.postMessage({ aquagridSfx: shown === 'nominal' ? 'clear' : shown }, '*'); } catch (e) { /* standalone page */ } }
+  lastKind = shown;
+  $('bG').textContent = g; $('bT').textContent = msg;
+  if (D.curveball && m >= D.curveball.trigger_minute) {
+    $('bC').textContent = D.curveball.id + ' ACTIVE · floor ' + fr.floor.toFixed(0) + '%';
+  } else {
+    $('bC').textContent = nFault + ' fault · ' + nLeak + ' leak · ' + al.filter(a => a.rank === 4).length + ' security · floor ' + fr.floor.toFixed(0) + '%';
+  }
 }
 
 // ---------- scrubber ----------
@@ -342,7 +380,7 @@ s('polyline', { points: lv.map((v, m) => xx(m).toFixed(1) + ',' + yy(v).toFixed(
 s('polyline', { points: D.frames.map(f => xx(f.m).toFixed(1) + ',' + yy(f.floor).toFixed(1)).join(' '), fill: 'none', stroke: 'var(--warn)', 'stroke-dasharray': '4 3', 'stroke-width': 1.4, 'vector-effect': 'non-scaling-stroke' }, spk);
 const mkSeen = new Set();
 for (const e of D.events) {
-  const cls = { LEAK: 'alarm', VETO: 'alarm', INJECTION: 'sec', QUARANTINE: 'warn', ALERT: 'warn' }[e.tag]; if (!cls || mkSeen.has(e.m + cls)) continue; mkSeen.add(e.m + cls);
+  const cls = { LEAK: 'alarm', VETO: 'alarm', INJECTION: 'sec', QUARANTINE: 'warn', ALERT: 'warn', CURVEBALL: 'alarm', GUARD: 'sec', REPLAY: 'sec', STAGED: 'alarm', TOKEN: 'warn' }[e.tag]; if (!cls || mkSeen.has(e.m + cls)) continue; mkSeen.add(e.m + cls);
   const k = h('div', 'mk ' + cls, null, $('mks')); k.style.left = e.m / (N - 1) * 100 + '%'; k.title = e.ts + ' ' + e.tag;
 }
 
@@ -356,6 +394,7 @@ function setRate(k) { rate = k; document.querySelectorAll('[data-k]').forEach(b 
 function seek(v, jumped) { t = Math.max(0, Math.min(L, v)); if (jumped) jumpFlag = true; if (t < L && !playing && !jumped) { } }
 function onMinute(m) {
   updateBanner(m); updateMap(m); setRadar(m); updateAlarms(m); updateMatrix(m); updateRoi(m); syncConsole(m, jumpFlag); jumpFlag = false;
+  if (updateCurveball) updateCurveball(m);
   rng.value = m; $('playhead').style.left = (Math.max(t, 0) / (N - 1) * 100) + '%';
 }
 function frame(now) {
@@ -384,4 +423,88 @@ addEventListener('keydown', e => {
 });
 setRate(4); setPlaying(playing);
 requestAnimationFrame(frame);
+
+// ---------- curveball story panel ----------
+if (D.curveball) {
+  const cb = D.curveball;
+  const cbPanel = document.querySelector('.low');
+  // Expand to 4-column section to include the curveball panel
+  cbPanel.style.gridTemplateColumns = 'minmax(0,1.1fr) minmax(0,1.25fr) minmax(0,.9fr) minmax(0,1.3fr)';
+
+  const pn = h('section', 'pn', null, cbPanel);
+  const ph2 = h('h2', null, null, pn);
+  const badge = h('span', null, cb.id, ph2);
+  badge.style.cssText = `background:${cb.color}22;color:${cb.color};border:1px solid ${cb.color}66;border-radius:3px;padding:1px 7px;margin-right:6px;font-size:10px`;
+  ph2.append(cb.title);
+  const jumpBtn = h('button', 'btn', '⚡ JUMP TO ' + D.times[cb.trigger_minute], ph2);
+  jumpBtn.style.cssText = `margin-left:auto;font:600 10px var(--mono);padding:2px 8px;background:var(--panel2);color:${cb.color};border:1px solid ${cb.color}88;border-radius:2px;cursor:pointer`;
+  jumpBtn.onclick = (e) => {
+    e.stopPropagation();
+    t = cb.trigger_minute;
+    jumpFlag = true;
+    setPlaying(true);
+  };
+  const topJump = h('button', 'btn', '⚡ ' + cb.id + ' (' + D.times[cb.trigger_minute] + ')', document.querySelector('.ctl'));
+  topJump.style.cssText = `color:${cb.color};border-color:${cb.color};font-weight:600;font-size:11px`;
+  topJump.onclick = () => {
+    t = cb.trigger_minute;
+    jumpFlag = true;
+    setPlaying(true);
+  };
+
+  const body = h('div', 'cbody', null, pn);
+
+  const steps = [
+    { key: 'what',    minute: cb.trigger_minute,     actor: 'EVENT',    color: '#f0564f', label: 'WHAT HAPPENED',  text: cb.what_happened },
+    { key: 'guard',   minute: cb.trigger_minute,     actor: 'CODE',     color: '#34d399', label: 'GUARD FIRED',    text: cb.guard_fired },
+    { key: 'agent',   minute: cb.trigger_minute + 1, actor: 'AGENT',    color: '#a855f7', label: 'AGENT RESPONSE', text: cb.agent_proposed },
+    { key: 'resolve', minute: cb.trigger_minute + 2, actor: 'HUMAN',    color: '#f2a93b', label: 'RESOLUTION',     text: cb.resolution },
+  ];
+
+  const stepEls = {};
+  for (const st of steps) {
+    const wrap = h('div', 'cbstep', null, body);
+    wrap.style.cssText = `border-left:3px solid ${st.color}44;padding:6px 8px;margin-bottom:6px;transition:border-color .4s,background .4s;border-radius:0 4px 4px 0`;
+    const hd = h('div', 'cbhd', null, wrap);
+    hd.style.cssText = `display:flex;gap:6px;align-items:center;margin-bottom:3px`;
+    const actBadge = h('span', null, st.actor, hd);
+    actBadge.style.cssText = `background:${st.color}22;color:${st.color};font:600 9px var(--mono);padding:1px 6px;border-radius:2px;border:1px solid ${st.color}44`;
+    h('span', null, st.label, hd).style.cssText = `font:600 10px var(--mono);color:var(--mut);letter-spacing:.08em`;
+    const txt = h('div', null, st.text, wrap);
+    txt.style.cssText = `font:11.5px/1.55 var(--sans);color:var(--dim);transition:color .4s`;
+    stepEls[st.key] = { wrap, txt, st };
+  }
+
+  // Architecture row
+  const arch = h('div', null, null, body);
+  arch.style.cssText = `margin-top:8px;padding:6px 8px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;font:10px var(--mono);color:var(--dim)`;
+  arch.textContent = cb.architecture;
+
+  // Progress bar
+  const progWrap = h('div', null, null, body);
+  progWrap.style.cssText = `margin-top:6px`;
+  const progLabel = h('div', null, '', progWrap);
+  progLabel.style.cssText = `font:10px var(--mono);color:var(--dim);margin-bottom:3px`;
+  const progTrack = h('div', null, null, progWrap);
+  progTrack.style.cssText = `height:4px;background:var(--line);border-radius:2px;overflow:hidden`;
+  const progBar = h('div', null, null, progTrack);
+  progBar.style.cssText = `height:100%;width:0%;background:${cb.color};transition:width .3s;border-radius:2px`;
+
+  updateCurveball = function(m) {
+    const triggered = m >= cb.trigger_minute;
+    const phase = m - cb.trigger_minute; // -ve = not yet, 0 = what/guard, 1 = agent, 2+ = resolve
+    for (const [key, { wrap, txt, st }] of Object.entries(stepEls)) {
+      const active = m >= st.minute;
+      wrap.style.borderColor = active ? st.color : st.color + '33';
+      wrap.style.background = active ? st.color + '0d' : 'transparent';
+      txt.style.color = active ? 'var(--ink)' : 'var(--dim)';
+    }
+    const pct = triggered ? Math.min(100, phase / 3 * 100) : 0;
+    progBar.style.width = pct + '%';
+    progLabel.textContent = triggered
+      ? `Curveball active since ${D.times[cb.trigger_minute]} · response phase ${Math.max(0, phase)}/3`
+      : `Curveball triggers at ${D.times[cb.trigger_minute]}`;
+  };
+  updateCurveball(F);
+}
 })();
