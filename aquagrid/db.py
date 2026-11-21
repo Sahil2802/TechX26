@@ -2,6 +2,7 @@
 import json
 import sqlite3
 from contextlib import contextmanager
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,26 +41,26 @@ INSERT OR IGNORE INTO fire_reserves(id, volume_m3, sector, requester) VALUES(1, 
 """
 
 
-_plant = "A"
+_plant: ContextVar[str] = ContextVar("plant", default="A")
 
 
 def set_plant(plant: str) -> None:
-    global _plant
     if plant not in config.PLANTS:
         raise ValueError(f"unknown plant {plant!r}")
-    _plant = plant
+    _plant.set(plant)
 
 
 def current_plant() -> str:
-    return _plant
+    return _plant.get()
 
 
 def db_path(plant: str | None = None) -> str:
-    """Plant A -> config.DB_PATH; other plants -> plant_<x>.sqlite beside it."""
-    plant = plant or _plant
-    if plant == "A":
-        return config.DB_PATH
-    return str(Path(config.DB_PATH).with_name(f"plant_{plant.lower()}.sqlite"))
+    """Plant A -> config.DB_PATH; plant B -> plant_b.sqlite beside it. Unknown plants raise."""
+    plant = _plant.get() if plant is None else plant
+    if plant not in config.PLANTS:
+        raise ValueError(f"unknown plant {plant!r}")
+    paths = {"A": config.DB_PATH, "B": str(Path(config.DB_PATH).with_name("plant_b.sqlite"))}
+    return paths[plant]
 
 
 def connect(ro: bool = False) -> sqlite3.Connection:
