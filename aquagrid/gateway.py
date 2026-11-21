@@ -86,7 +86,7 @@ def _stage(conn: sqlite3.Connection, raw_args: object, run_id: str, proposed_by:
     return StageResult(status=status, action_id=action_id, reasons=reasons)
 
 
-# ---- human side: only app.py and cli.py may call these, never the agent -----------------------
+# ---- human side: only web.py (operator API, token-protected) and cli.py may call these, never the agent ----
 
 def _record(row: sqlite3.Row) -> ActionRecord:
     d = dict(row)

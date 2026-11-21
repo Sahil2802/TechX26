@@ -1,6 +1,6 @@
 """AquaGrid operator console backend. Run with: uvicorn aquagrid.web:app
 
-Thin JSON layer over the same view/gateway/agent modules the Streamlit page used. CODE decides what is true
+Thin JSON layer over the same view/gateway/agent modules the CLI uses. CODE decides what is true
 and safe, the LLM reads and explains, a HUMAN approves every valve or setpoint change. The LLM never reaches
 these endpoints; approve/reject/revert only run on an explicit operator request (and token, when configured).
 """

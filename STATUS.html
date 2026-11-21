@@ -61,7 +61,7 @@
   <h2>Core agent (Round 1)</h2>
   <div class="grid">
     <div class="row"><h3>Safety guards, gateway, agent, UI</h3><span class="pill done">Done</span>
-      <p>Sensor health (flatline, drift, impossible values, mass balance), reservoir floors, the single gated write path, the LLM agent with fallbacks, and the Streamlit operator console. The three Round 1 demo scenarios are covered by automated tests.</p></div>
+      <p>Sensor health (flatline, drift, impossible values, mass balance), reservoir floors, the single gated write path, the LLM agent with fallbacks, and the React operator console (Mission Control replay, classic view, approval gate) served by a token-protected FastAPI API. The three Round 1 demo scenarios are covered by automated tests.</p></div>
     <div class="row"><h3>Offline model, rehearsal, packaging</h3><span class="pill part">Not verified</span>
       <p><code>PLAN.md</code> lists the Ollama offline decision, the 90-second demo rehearsal, a clean database reset and submission packaging as open. I haven't checked any of them.</p></div>
   </div>
@@ -112,7 +112,7 @@
   <h2>Environment notes</h2>
   <div class="note">
     Windows Application Control blocks launcher executables and some compiled files here. Run the app with the 3.12 venv:
-    <code>%USERPROFILE%\venvs\aquagrid312\Scripts\python.exe -m streamlit run app.py</code>. Always use <code>python -m</code>, never the bare <code>streamlit</code> command.
+    <code>%USERPROFILE%\venvs\aquagrid312\Scripts\python.exe -m uvicorn aquagrid.web:app --port 8000</code>, then open <code>http://localhost:8000</code>. Build the frontend once first with <code>npm --prefix frontend install</code> and <code>npm --prefix frontend run build</code>. Always use <code>python -m</code>, never the bare <code>uvicorn</code> command. Every change in the console needs the <code>OPERATOR_TOKEN</code> from <code>.env</code>.
     If the demo machine has a similar policy, WNTR may not load there, and the check will use its plain-Python fallback.
   </div>
 

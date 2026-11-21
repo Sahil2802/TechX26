@@ -1,6 +1,6 @@
 """Terminal demo and operator console.
 
-Human-side commands (approve / reject / revert) live here and in app.py, never in the agent.
+Human-side commands (approve / reject / revert) live here and in web.py, never in the agent.
 Usage: python -m aquagrid.cli seed | reset S | inspect S | run S [--attack] | queue
        | approve ID --operator NAME | reject ID --operator NAME | revert ID --operator NAME
 """

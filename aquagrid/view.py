@@ -160,7 +160,7 @@ def trace_rows(run_id: str) -> list[dict]:
 
 
 GATE_ANCHOR_ID = "human-gate-anchor"
-TAB_LABEL = "Action required"  # app.py names the gate's tab with this text; the popup finds the tab by it
+TAB_LABEL = "Action required"  # legacy Streamlit popup helper; the React console does this in frontend/src/Popup.tsx
 _POPUP_ID = "aquagrid-approval-popup"
 
 
