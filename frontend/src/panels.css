@@ -1,0 +1,37 @@
+/* Sensor selection + detail card */
+.sensors { position: relative; }
+.sensors tbody tr[aria-selected] { cursor: pointer; }
+.sensors tbody tr[aria-selected]:hover { background: color-mix(in srgb, var(--teal, #14b8a6) 10%, transparent); }
+.sensors tbody tr[aria-selected='true'] { background: color-mix(in srgb, var(--teal, #14b8a6) 18%, transparent); }
+.sensors tbody tr:focus-visible { outline: 2px solid var(--teal, #14b8a6); outline-offset: -2px; }
+
+.scard {
+  position: absolute; top: 44px; right: 14px; z-index: 5; width: min(340px, calc(100% - 28px));
+  padding: 12px 14px; border-radius: 12px; color: var(--ink, #e6edf7);
+  background: color-mix(in srgb, var(--panel2, #18243b) 82%, transparent);
+  border: 1px solid var(--line, #243251);
+  backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .45);
+}
+.scard header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 15px; }
+.scard-x {
+  background: none; border: 1px solid var(--line, #243251); color: var(--ink, #e6edf7);
+  border-radius: 8px; width: 28px; height: 28px; font-size: 18px; line-height: 1; cursor: pointer;
+}
+.scard-x:hover { border-color: var(--teal, #14b8a6); }
+.scard-x:focus-visible { outline: 2px solid var(--teal, #14b8a6); outline-offset: 2px; }
+.scard dl { margin: 0 0 10px; display: grid; gap: 4px; }
+.scard dl div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.scard dt { color: var(--mut, #8b9bb8); }
+.scard dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.scard-trust { padding: 6px 10px; border-radius: 8px; font-weight: 700; font-size: 13px; border: 1px solid; }
+.scard-trust span { font-weight: 500; }
+.scard-trust.is-bad { color: var(--red, #f0564f); background: var(--redbg, #3a1618); border-color: var(--red, #f0564f); }
+.scard-trust.is-ok { color: var(--ok, #34d399); background: var(--okbg, #0f2f26); border-color: var(--ok, #34d399); }
+.scard-why { margin: 10px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.scard-why small { display: block; color: var(--mut, #8b9bb8); margin-bottom: 2px; }
+
+/* Level chart: peak band + floor emphasis */
+.peak-band { fill: var(--amb, #f2a93b); opacity: .16; }
+svg text.peak-label { fill: var(--amb, #f2a93b); font-weight: 600; }
+svg text.floor-label { fill: var(--red, #f0564f); font-weight: 700; }

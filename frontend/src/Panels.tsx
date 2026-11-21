@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { LevelChart } from './LevelChart'
+import { SensorCard } from './SensorCard'
+import './panels.css'
 import type { Arithmetic, Finding, Metrics, Schedule, SensorRow, State } from './types'
 
 const fmt = (n: number, d = 0) => n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
@@ -38,15 +41,23 @@ export function MetricCards({ m, fireM3 }: { m: Metrics; fireM3: number }) {
 export function SensorsPanel({ sensors, valves }: { sensors: SensorRow[]; valves: State['valves'] }) {
   const bad = sensors.filter((r) => r.Trust === 'QUARANTINED').length
   const moved = Object.entries(valves).filter(([, p]) => p < 100)
+  const [selId, setSelId] = useState<string | null>(null)
+  const sel = sensors.find((r) => r.Sensor === selId)
+  const pick = (id: string) => setSelId((cur) => (cur === id ? null : id))
   return (
-    <div className="box">
+    <div className="box sensors" onKeyDown={(e) => { if (e.key === 'Escape') setSelId(null) }}>
       <div className="mut">{sensors.length - bad} trusted · {bad} QUARANTINED (excluded from every calculation)</div>
+      {sel && <SensorCard r={sel} onClose={() => setSelId(null)} />}
       <div className="scroll">
         <table>
           <thead><tr>{['Sensor', 'Kind', 'At', 'Latest', 'Status', 'Trust', 'Why'].map((c) => <th key={c}>{c}</th>)}</tr></thead>
           <tbody>
             {sensors.map((r) => (
-              <tr key={r.Sensor}>
+              <tr key={r.Sensor} tabIndex={0} aria-selected={r.Sensor === selId}
+                onClick={() => pick(r.Sensor)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(r.Sensor) }
+                }}>
                 <td>{r.Sensor}</td><td>{r.Kind}</td><td>{r.At}</td><td>{r.Latest}</td><td>{r.Status}</td>
                 <td>{r.Trust === 'QUARANTINED' ? <span className="bad">🔴 QUARANTINED</span> : <span className="good">🟢 trusted</span>}</td>
                 <td>{r.Why}</td>
@@ -80,6 +91,17 @@ export function Findings({ findings }: { findings: Finding[] }) {
   )
 }
 
+// Hours at the highest tariff; empty when the tariff is flat, so the chart shades nothing.
+function peakHoursOf(sc: Schedule): number[] {
+  const tariffs = sc.slots.map((t) => t.tariff_aed_kwh)
+  const maxT = Math.max(...tariffs), minT = Math.min(...tariffs)
+  return tariffs.length && maxT > minT ? sc.slots.filter((t) => t.tariff_aed_kwh === maxT).map((t) => t.hour) : []
+}
+
+export function ReservoirChart({ s }: { s: State }) {
+  return <div className="box"><h2 className="box-title">Reservoir level vs floor</h2><LevelChart chart={s.chart} peakHours={peakHoursOf(s.schedule)} /></div>
+}
+
 export function ScheduleSection({ s }: { s: State }) {
   const sc: Schedule = s.schedule
   const arith = (label: string, a: Arithmetic) => (
@@ -88,11 +110,12 @@ export function ScheduleSection({ s }: { s: State }) {
       <pre>{a.lines.join('\n')}</pre>
     </>
   )
+  const peakHours = peakHoursOf(sc)
   return (
     <>
       <div className="cols">
         <div className="box">
-          <LevelChart chart={s.chart} />
+          <LevelChart chart={s.chart} peakHours={peakHours} />
           <div className="mut valves">
             Scheduled cost {fmt(sc.cost_aed)} AED vs {fmt(sc.baseline_cost_aed)} AED at flat production · {fmt(sc.kwh_saved)} kWh
             of peak-hour energy avoided · always above floor + {sc.buffer_pct}%

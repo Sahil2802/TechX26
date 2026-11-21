@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as api from './api'
+import { Login, type Session } from './Login'
 import { ApprovalGate, RunPanel } from './Gate'
-import { Findings, MetricCards, ScheduleSection, SensorsPanel } from './Panels'
-import { ApprovalPopup } from './Popup'
+import { Findings, MetricCards, ReservoirChart, ScheduleSection, SensorsPanel } from './Panels'
+import { ApprovalBanner } from './Popup'
+import { Hero, HeroVideo, Rail, TopBar, type Tab } from './ShellParts'
 import type { DecideResult, State, Verb } from './types'
 
 interface Toast { id: number; kind: DecideResult['kind']; text: string }
-type Tab = 'mission' | 'classic' | 'action'
 
 export default function App() {
   const [state, setState] = useState<State | null>(null)
@@ -15,8 +16,9 @@ export default function App() {
   const [fireVol, setFireVol] = useState('0')
   const [fireSector, setFireSector] = useState('S6')
   const [busy, setBusy] = useState(false)
-  const [token, setToken] = useState('') // kept in memory only; sent as X-Operator-Token on every write
-  const [tab, setTab] = useState<Tab>('mission')
+  const [session, setSession] = useState<Session | null>(null) // the token itself lives in api.ts, in memory only
+  const [plant, setPlant] = useState('')
+  const [tab, setTab] = useState<Tab>('overview')
   const [toasts, setToasts] = useState<Toast[]>([])
   const toastId = useRef(0)
   const missionFrame = useRef<HTMLIFrameElement>(null)
@@ -36,7 +38,16 @@ export default function App() {
     setFireSector(s.fire.sector)
   }, [])
 
-  useEffect(() => { refresh().catch((e: Error) => toast('error', e.message)) }, [refresh, toast])
+  useEffect(() => {
+    api.setUnauthorizedHandler(() => { api.setSession('', 'A'); setSession(null); setState(null) })
+  }, [])
+
+  useEffect(() => {
+    if (session) refresh().catch((e: Error) => { if (!(e instanceof api.UnauthorizedError)) toast('error', e.message) })
+  }, [refresh, toast, session, plant])
+
+  const onReady = (s: Session) => { api.setSession(s.token, s.plant); setPlant(s.plant); setSession(s) }
+  const switchPlant = (id: string) => { if (!session) return; api.setSession(session.token, id); setState(null); setPlant(id) }
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -70,120 +81,74 @@ export default function App() {
     }
   }
 
+  if (!session) return <Login onReady={onReady} />
   if (!state) return <main><p className="mut">Loading console…</p><Toasts toasts={toasts} /></main>
 
   const fireActive = state.fire.volume_m3 > 0
   const firePct = (state.fire.volume_m3 / state.metrics.capacity_m3) * 100
   const pending = state.actions.filter((a) => a.status === 'PENDING_APPROVAL')
-  const tabs: [Tab, string][] = [
-    ['mission', 'Mission Control'],
-    ['classic', 'Classic console'],
-    ['action', pending.length ? `🔔 Action required (${pending.length})` : 'Action required'],
-  ]
 
   return (
-    <main>
-      <h1>💧 AquaGrid operator console</h1>
-      <div>
-        <span className="pill p-code">CODE decides</span>
-        <span className="pill p-llm">LLM explains</span>
-        <span className="pill p-human">HUMAN approves</span>
-        <span className="mut">synthetic demo data · simulated clock <b>{state.demo_now.replace('T', ' ')}</b></span>
-      </div>
+    <div className="app">
+      <HeroVideo />
+      <TopBar clock={state.demo_now} tab={tab} onTab={setTab} pending={pending.length}
+        plant={state.plant} plants={state.plants} admin={session.role === 'admin'} onPlant={switchPlant} />
+      <Hero levelPct={state.metrics.level_pct} floorPct={state.metrics.floor_pct} band={state.metrics.band} pending={pending.length} />
+      <ApprovalBanner ids={pending.map((a) => a.id)} onOpen={() => setTab('approvals')} />
+      <div className="shell">
+        <Rail
+          state={state} scenario={scenario} busy={busy} scripted={scripted}
+          fireVol={fireVol} fireSector={fireSector}
+          onScenario={(k) => { setScenario(k); act(async () => { await api.loadScenario(k) }) }}
+          onRun={() => act(async () => { await api.runAgent(scenario, scripted) })}
+          onScripted={setScripted} onFireVol={setFireVol} onFireSector={setFireSector}
+          onApplyFire={() => act(async () => { await api.applyFire(Number(fireVol) || 0, fireSector) })}
+        />
 
-      <div className="bar">
-        <label>Scenario
-          <select value={scenario} onChange={(e) => setScenario(e.target.value)}>
-            {Object.entries(state.scenarios).map(([k, v]) => <option key={k} value={k}>{k}: {v.name}</option>)}
-          </select>
-        </label>
-        <button disabled={busy} onClick={() => act(async () => { await api.loadScenario(scenario) })}>Load scenario</button>
-        <button className="primary" disabled={busy} onClick={() => act(async () => { await api.runAgent(scenario, scripted) })}>Run agent</button>
-        <label>Model
-          <select value={scripted ? 'scripted' : 'real'} onChange={(e) => setScripted(e.target.value === 'scripted')}>
-            <option value="real">Real LLM chain</option>
-            <option value="scripted">Scripted attacker</option>
-          </select>
-        </label>
-        {state.operator_token_required && (
-          <label>Operator token
-            <input type="password" value={token} autoComplete="off" placeholder="required for every change"
-              onChange={(e) => { setToken(e.target.value); api.setOperatorToken(e.target.value) }} />
-          </label>
-        )}
-      </div>
-      <div className="mut">
-        {state.scenarios[scenario]?.blurb} · LLM chain with keys: {state.llm_chain.join(' → ') || 'none'} (Ollama is local, not probed)
-      </div>
-
-      <ApprovalPopup ids={pending.map((a) => a.id)} onOpen={() => setTab('action')} />
-      {pending.length > 0 && (
-        <div className="alert a-warning" role="status">
-          🔔 <b>{pending.length} action(s) need your decision.</b> Open the <b>Action required</b> tab: nothing moves until you approve.
-        </div>
-      )}
-      <div className="tabs main-tabs" role="tablist">
-        {tabs.map(([id, label]) => (
-          <button key={id} role="tab" className="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
-        ))}
-      </div>
-
-      {/* All three tabs stay mounted and are only hidden, so the Mission Control replay and the
-          gate's form state survive switching tabs. */}
-      <div hidden={tab !== 'mission'}>
-          <div className="mission-wrap">
-            <span className="mut mission-loading">Loading Mission Control…</span>
-            <iframe ref={missionFrame} className="mission" title="AquaGrid Mission Control" sandbox="allow-scripts"
-              src={missionSrc} />
+        {/* All four tabs stay mounted and are only hidden, so the Mission Control replay and the
+            gate's form state survive switching tabs. */}
+        <main className="stage">
+          <div hidden={tab !== 'overview'}>
+            <div className="mission-wrap">
+              <span className="mut mission-loading">Loading Mission Control…</span>
+              <iframe ref={missionFrame} className="mission" title="AquaGrid Mission Control" sandbox="allow-scripts"
+                src={missionSrc} />
+            </div>
+            <p className="mut">Read-only replay of the selected scenario, 12:00-14:00. Every figure is computed by the guards; the agent feed
+              narrates it. Pick a scenario and Run agent on the left, then decide in Approvals.</p>
+            <MetricCards m={state.metrics} fireM3={state.fire.volume_m3} />
+            <div className="cols">
+              <section><h2>Sensors</h2><SensorsPanel sensors={state.sensors} valves={state.valves} /></section>
+              <section><h2>Reservoir</h2><ReservoirChart s={state} /></section>
+            </div>
           </div>
-          <p className="mut">Read-only replay of the selected scenario, 12:00-14:00. Every figure is computed by the guards; the agent feed
-            narrates it. Use Load scenario / Run agent above, then decide in the Action required tab.</p>
+
+          <div hidden={tab !== 'telemetry'}>
+            {fireActive
+              ? <div className="alert a-warning">🚒 <b>Fire reserve ACTIVE</b>: {state.fire.volume_m3.toLocaleString()} m³ ({firePct.toFixed(1)}%) locked for Civil Defence (Sector {state.fire.sector}). Effective floor raised to <b>{state.metrics.floor_pct.toFixed(0)}%</b>.</div>
+              : <div className="alert a-info">No active fire request. Set a volume in the left rail to simulate the Civil Defence curveball (U-5.2); it locks that volume on top of the 35 % strategic reserve.</div>}
+            <h2>Leak vs sensor fault</h2>
+            <Findings findings={state.findings} />
+            <h2>Tariff-aware schedule and the reserve floor</h2>
+            <ScheduleSection s={state} />
+          </div>
+
+          <div hidden={tab !== 'approvals'}>
+            <h2>Human approval gate</h2>
+            <ApprovalGate actions={state.actions} disabled={busy}
+              demoLeak={state.demo_leak} onStageDemo={() => act(api.stageDemo)}
+              onDecide={(id, verb: Verb, operator, note) => act(() => api.decide(id, verb, operator, note))} />
+          </div>
+
+          <div hidden={tab !== 'log'}>
+            <h2>Agent briefing and decision trace</h2>
+            <RunPanel key={state.run?.run_id ?? 'none'} run={state.run} />
+            <p className="mut">The LLM reads through two read-only tools and can only queue proposals. Code validates every proposal; only a human can approve, reject or revert.</p>
+          </div>
+        </main>
       </div>
-
-      <div hidden={tab !== 'classic'}>
-      <details open={fireActive}>
-        <summary>🚒 Civil Defence emergency fire reserve (U-5.2)</summary>
-        <p className="mut">A fire request locks this volume on top of the 35 % strategic reserve. The scheduler veto and all guard arithmetic update immediately.</p>
-        <div className="bar">
-          <label>Requested volume (m³)
-            <input type="number" min={0} max={10000} step={500} value={fireVol} onChange={(e) => setFireVol(e.target.value)} />
-          </label>
-          <label>Sector
-            <select value={fireSector} onChange={(e) => setFireSector(e.target.value)}>
-              {state.fire_sectors.map((s) => <option key={s}>{s}</option>)}
-            </select>
-          </label>
-          <button className="primary" disabled={busy}
-            onClick={() => act(async () => { await api.applyFire(Number(fireVol) || 0, fireSector) })}>Apply request</button>
-        </div>
-        {fireActive
-          ? <div className="alert a-warning">🚒 <b>Fire reserve ACTIVE</b> — {state.fire.volume_m3.toLocaleString()} m³ ({firePct.toFixed(1)}%) locked for Civil Defence (Sector {state.fire.sector}). Effective floor raised to <b>{state.metrics.floor_pct.toFixed(0)}%</b>.</div>
-          : <div className="alert a-info">No active fire request. Enter a volume and Apply to simulate the curveball.</div>}
-      </details>
-
-      <MetricCards m={state.metrics} fireM3={state.fire.volume_m3} />
-
-      <div className="cols">
-        <section><h2>Network &amp; sensors</h2><SensorsPanel sensors={state.sensors} valves={state.valves} /></section>
-        <section><h2>Leak vs sensor fault</h2><Findings findings={state.findings} /></section>
-      </div>
-
-      <h2>Tariff-aware schedule and the reserve floor</h2>
-      <ScheduleSection s={state} />
-      </div>
-
-      <div hidden={tab !== 'action'}>
-      <h2>Human approval gate</h2>
-      <ApprovalGate actions={state.actions} disabled={busy}
-        demoLeak={state.demo_leak} onStageDemo={() => act(api.stageDemo)}
-        onDecide={(id, verb: Verb, operator, note) => act(() => api.decide(id, verb, operator, note))} />
-      </div>
-
-      <h2>Agent briefing and decision trace</h2>
-      <RunPanel key={state.run?.run_id ?? 'none'} run={state.run} />
-      <p className="mut">The LLM reads through two read-only tools and can only queue proposals. Code validates every proposal; only a human can approve, reject or revert.</p>
       <Toasts toasts={toasts} />
-    </main>
+    </div>
   )
 }
 

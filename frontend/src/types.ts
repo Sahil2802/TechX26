@@ -95,7 +95,13 @@ export interface State {
   run: Run | null
   demo_leak: { valve: string; pipe: string | null } | null
   mission_key: string
+  plant: string
+  plants: PlantInfo[]
+  role: 'admin' | 'plant'
 }
+
+export interface PlantInfo { id: string; name: string }
+export interface LoginResult { role: 'admin' | 'plant'; plants: PlantInfo[] }
 
 export type Verb = 'approve' | 'reject' | 'revert'
 export interface DecideResult { kind: 'success' | 'warning' | 'error'; message: string; status: string }
