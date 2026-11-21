@@ -15,7 +15,7 @@ const h = (tag, cls, text, parent) => { const e = document.createElement(tag); i
 const s = (tag, attrs, parent, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; };
 const spec = Object.fromEntries(D.specs.map(x => [x.id, x]));
 const base = Object.fromEntries(Object.entries(D.series).map(([k, v]) => [k, mean(v.slice(0, 60))]));
-const val = (id, m) => D.series[id][Math.max(0, Math.min(N - 1, m))];
+const val = (id, m) => { const arr = D.series[id]; return (arr && arr.length) ? arr[Math.max(0, Math.min(arr.length - 1, m))] : 0; };
 const run = D.run || [];
 const runBlocked = run.filter(r => /BLOCKED$/.test(r.Step)), runRejected = run.filter(r => /REJECTED_BY_GUARD$/.test(r.Step));
 

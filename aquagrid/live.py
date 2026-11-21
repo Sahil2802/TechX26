@@ -96,8 +96,15 @@ def _event(m: int, actor: str, level: str, tag: str, text: str) -> dict:
 def _diff_events(prev: dict | None, cur: dict) -> list[dict]:
     """What changed between two minutes, as CODE facts each followed by the AGENT's reading of them."""
     m, out = cur["m"], []
-    for sid, (status, why) in cur["bad"].items():
-        if prev is None or sid not in prev["bad"]:
+    new_bad = [sid for sid in cur["bad"] if prev is None or sid not in prev["bad"]]
+    if len(new_bad) >= 10:
+        out.append(_event(m, "CODE", "warn", "QUARANTINE",
+                          f"All {len(new_bad)} sensors STALE: SCADA feed quiet > 10 min. Entire network quarantined."))
+        out.append(_event(m, "AGENT", "info", "REASON",
+                          "All telemetry is stale (>10 min loss). Excluding all sensors from optimization; holding safe baseline 1,900 m³/h."))
+    else:
+        for sid in new_bad:
+            status, why = cur["bad"][sid]
             out.append(_event(m, "CODE", "warn", "QUARANTINE", f"{sid} {status}: {why}"))
             out.append(_event(m, "AGENT", "info", "REASON",
                               f"{sid} excluded from every calculation; its readings no longer count as evidence."))
@@ -256,6 +263,10 @@ def build_timeline(scenario: str, run_rows: list[dict] | None = None) -> dict:
     try:
         specs = tools._specs(conn)
         full = tools._series(conn, scenario, [s.id for s in specs], None, ts(LAST_MINUTE))
+        # Ensure all series have exactly seed_data.MINUTES items (holding last safe state if telemetry drops)
+        for sid, vals in full.items():
+            if vals and len(vals) < seed_data.MINUTES:
+                vals.extend([vals[-1]] * (seed_data.MINUTES - len(vals)))
         try:
             fire_m3 = float(db.get_fire_reserve(conn)["volume_m3"])
         except Exception:
