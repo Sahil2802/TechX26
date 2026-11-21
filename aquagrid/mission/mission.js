@@ -30,6 +30,12 @@ function alarmsOf(fr, m) {
   D.alerts.forEach((a, i) => { if (a.flags.length && m >= a.m) out.push({ key: 'I' + i, rank: 4, g: '■', tag: 'ALERT TEXT', text: 'prompt injection redacted [' + a.flags.join(', ') + ']' }); });
   if (m >= L && runBlocked.length) out.push({ key: 'RB', rank: 4, g: '■', tag: 'GATEWAY', text: runBlocked.length + ' bypass attempt(s) BLOCKED, nothing stored' });
   if (m >= L && runRejected.length) out.push({ key: 'RR', rank: 4, g: '■', tag: 'GUARD', text: runRejected.length + ' proposal(s) REJECTED_BY_GUARD' });
+  if (D.curveball && m >= D.curveball.trigger_minute) {
+    out.push({
+      key: 'CB', rank: 4, g: '■', tag: D.curveball.id,
+      text: D.curveball.title + ' · ' + (D.curveball.what_happened.length > 70 ? D.curveball.what_happened.slice(0, 70) + '…' : D.curveball.what_happened)
+    });
+  }
   return out;
 }
 const firstSeen = {};
@@ -38,6 +44,10 @@ for (let m = F; m <= L; m++) for (const a of alarmsOf(frameAt(m), m)) if (!(a.ke
 // ---------- header ----------
 $('scn').textContent = '';
 $('scn').append('SCENARIO ', Object.assign(h('b'), { textContent: D.scenario }), ' · ' + D.name);
+if (D.curveball) {
+  const cbBadge = h('span', null, '🎯 ' + D.curveball.id + ' MODE', $('scn'));
+  cbBadge.style.cssText = 'margin-left:8px;background:' + D.curveball.color + '22;color:' + D.curveball.color + ';border:1px solid ' + D.curveball.color + '66;border-radius:3px;padding:1px 6px;font:600 10px var(--mono)';
+}
 $('roiWin').textContent = pad2(D.peak[0]) + ':00–' + pad2(D.peak[1]) + ':00';
 
 // ---------- map ----------
@@ -123,6 +133,15 @@ function updateMap(m) {
     s('rect', { x: tx, y: ty2, width: w, height: 14 }, g);
     s('text', { x: tx + 5, y: ty2 + 10.5 }, g, label);
   });
+  if (D.curveball && m >= D.curveball.trigger_minute && D.curveball.tag_node && POS[D.curveball.tag_node]) {
+    const [x, y] = POS[D.curveball.tag_node];
+    const label = D.curveball.id + '  ' + (D.curveball.tag_label || 'ACTIVE');
+    const w = label.length * 6 + 12, tx = Math.max(4, Math.min(640 - w - 4, x - w / 2)), ty2 = y - 34;
+    const g = s('g', { class: 'tag ' + (D.curveball.banner_kind === 'security' ? 'alarm' : 'warn') }, gTags);
+    s('line', { x1: x, y1: y - 9, x2: x, y2: ty2 + 14 }, g);
+    s('rect', { x: tx, y: ty2, width: w, height: 14 }, g);
+    s('text', { x: tx + 5, y: ty2 + 10.5 }, g, label);
+  }
 }
 
 // ---------- radar ----------
@@ -318,11 +337,30 @@ function updateBanner(m) {
     if (fr.bloom) parts.push('ALGAL BLOOM · FLOOR ' + fr.floor.toFixed(0) + '%');
     msg = 'ADVISORY · ' + parts.join(' · ');
   }
-  if (kind === 'alarm') { g = '◆'; const lk = Object.values(fr.sectors).find(f => f.v === 'GENUINE_LEAK'); msg = 'ALARM · LEAK ' + lk.pipe + ' · ISOLATE ' + lk.valve + ' · AWAITING OPERATOR APPROVAL'; }
-  if (kind === 'security') { g = '■'; msg = 'SECURITY ALERT · PROMPT INJECTION DETECTED · UNTRUSTED TEXT REDACTED · WRITES LOCKED TO HUMAN APPROVAL'; }
-  b.dataset.s = kind; $('bG').textContent = g; $('bT').textContent = msg;
-  $('bC').textContent = nFault + ' fault · ' + nLeak + ' leak · ' + al.filter(a => a.rank === 4).length + ' security · floor ' + fr.floor.toFixed(0) + '%';
-  document.body.classList.toggle('attack', kind === 'security');
+  if (kind === 'alarm') {
+    g = '◆';
+    const lk = Object.values(fr.sectors).find(f => f.v === 'GENUINE_LEAK');
+    msg = lk ? ('ALARM · LEAK ' + lk.pipe + ' · ISOLATE ' + lk.valve + ' · AWAITING OPERATOR APPROVAL') : 'ALARM · SYSTEM ALERT ACTIVE';
+  }
+  if (kind === 'security') {
+    g = '■';
+    msg = 'SECURITY ALERT · PROMPT INJECTION DETECTED · UNTRUSTED TEXT REDACTED · WRITES LOCKED TO HUMAN APPROVAL';
+  }
+  if (D.curveball && m >= D.curveball.trigger_minute) {
+    g = D.curveball.banner_glyph || (D.curveball.banner_kind === 'security' ? '■' : '◆');
+    msg = D.curveball.banner_msg || (D.curveball.id + ' · ' + D.curveball.title.toUpperCase());
+    b.dataset.s = D.curveball.banner_kind || 'security';
+    document.body.classList.toggle('attack', (D.curveball.banner_kind || 'security') === 'security');
+  } else {
+    b.dataset.s = kind;
+    document.body.classList.toggle('attack', kind === 'security');
+  }
+  $('bG').textContent = g; $('bT').textContent = msg;
+  if (D.curveball && m >= D.curveball.trigger_minute) {
+    $('bC').textContent = D.curveball.id + ' ACTIVE · floor ' + fr.floor.toFixed(0) + '%';
+  } else {
+    $('bC').textContent = nFault + ' fault · ' + nLeak + ' leak · ' + al.filter(a => a.rank === 4).length + ' security · floor ' + fr.floor.toFixed(0) + '%';
+  }
 }
 
 // ---------- scrubber ----------
@@ -335,7 +373,7 @@ s('polyline', { points: lv.map((v, m) => xx(m).toFixed(1) + ',' + yy(v).toFixed(
 s('polyline', { points: D.frames.map(f => xx(f.m).toFixed(1) + ',' + yy(f.floor).toFixed(1)).join(' '), fill: 'none', stroke: 'var(--warn)', 'stroke-dasharray': '4 3', 'stroke-width': 1.4, 'vector-effect': 'non-scaling-stroke' }, spk);
 const mkSeen = new Set();
 for (const e of D.events) {
-  const cls = { LEAK: 'alarm', VETO: 'alarm', INJECTION: 'sec', QUARANTINE: 'warn', ALERT: 'warn' }[e.tag]; if (!cls || mkSeen.has(e.m + cls)) continue; mkSeen.add(e.m + cls);
+  const cls = { LEAK: 'alarm', VETO: 'alarm', INJECTION: 'sec', QUARANTINE: 'warn', ALERT: 'warn', CURVEBALL: 'alarm', GUARD: 'sec', REPLAY: 'sec', STAGED: 'alarm', TOKEN: 'warn' }[e.tag]; if (!cls || mkSeen.has(e.m + cls)) continue; mkSeen.add(e.m + cls);
   const k = h('div', 'mk ' + cls, null, $('mks')); k.style.left = e.m / (N - 1) * 100 + '%'; k.title = e.ts + ' ' + e.tag;
 }
 
@@ -391,6 +429,21 @@ if (D.curveball) {
   const badge = h('span', null, cb.id, ph2);
   badge.style.cssText = `background:${cb.color}22;color:${cb.color};border:1px solid ${cb.color}66;border-radius:3px;padding:1px 7px;margin-right:6px;font-size:10px`;
   ph2.append(cb.title);
+  const jumpBtn = h('button', 'btn', '⚡ JUMP TO ' + D.times[cb.trigger_minute], ph2);
+  jumpBtn.style.cssText = `margin-left:auto;font:600 10px var(--mono);padding:2px 8px;background:var(--panel2);color:${cb.color};border:1px solid ${cb.color}88;border-radius:2px;cursor:pointer`;
+  jumpBtn.onclick = (e) => {
+    e.stopPropagation();
+    t = cb.trigger_minute;
+    jumpFlag = true;
+    setPlaying(true);
+  };
+  const topJump = h('button', 'btn', '⚡ ' + cb.id + ' (' + D.times[cb.trigger_minute] + ')', document.querySelector('.ctl'));
+  topJump.style.cssText = `color:${cb.color};border-color:${cb.color};font-weight:600;font-size:11px`;
+  topJump.onclick = () => {
+    t = cb.trigger_minute;
+    jumpFlag = true;
+    setPlaying(true);
+  };
 
   const body = h('div', 'cbody', null, pn);
 
