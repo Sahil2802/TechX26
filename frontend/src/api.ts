@@ -38,9 +38,9 @@ export const runAgent = (scenario: string, scripted: boolean) => call<Run>('/api
 export const applyFire = (volume_m3: number, sector: string) => call<{ ok: true }>('/api/fire', { volume_m3, sector })
 export const stageDemo = () => call<DecideResult>('/api/stage-demo', {})
 // The iframe cannot send headers, so the session rides in the query string.
-export const missionUrl = (scenario: string, key: string, at: number | null = null) =>
+export const missionUrl = (scenario: string, key: string, plant: string, token: string, at: number | null = null) =>
   `/api/mission?scenario=${encodeURIComponent(scenario)}&key=${encodeURIComponent(key)}` +
-  `&token=${encodeURIComponent(sessionToken)}&plant=${encodeURIComponent(sessionPlant)}` +
+  `&token=${encodeURIComponent(token)}&plant=${encodeURIComponent(plant)}` +
   (at === null ? '' : `&at=${at.toFixed(2)}`)
 export const decide = (id: number, verb: Verb, operator: string, note: string) =>
   call<DecideResult>(`/api/actions/${id}/${verb}`, { operator, note })

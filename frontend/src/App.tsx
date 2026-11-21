@@ -23,6 +23,23 @@ export default function App() {
   const toastId = useRef(0)
   const missionFrame = useRef<HTMLIFrameElement>(null)
   const playhead = useRef<number | null>(null) // minute the Mission Control replay has reached, reported by the iframe
+  const epoch = useRef(0) // bumped on every plant switch and logout; late responses from an older epoch are dropped
+  const plantRef = useRef('')
+  const [loadError, setLoadError] = useState('')
+
+  // Forget everything tied to the previous plant/session so nothing leaks into the next one.
+  const resetView = useCallback((nextPlant: string) => {
+    epoch.current += 1
+    plantRef.current = nextPlant
+    playhead.current = null
+    setPlant(nextPlant); setState(null); setScenario(''); setFireVol('0'); setFireSector('S6'); setLoadError('')
+  }, [])
+  const logout = useCallback(() => {
+    api.setSession('', 'A')
+    resetView('')
+    setSession(null)
+    setToasts([])
+  }, [resetView])
 
   const toast = useCallback((kind: Toast['kind'], text: string) => {
     const id = ++toastId.current
@@ -31,7 +48,9 @@ export default function App() {
   }, [])
 
   const refresh = useCallback(async () => {
+    const mine = epoch.current
     const s = await api.getState()
+    if (mine !== epoch.current || s.plant !== plantRef.current) return // stale: plant switched or logged out meanwhile
     setState(s)
     setScenario((cur) => (cur in s.scenarios ? cur : s.loaded ?? Object.keys(s.scenarios)[0]))
     setFireVol(String(s.fire.volume_m3))
@@ -39,15 +58,21 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    api.setUnauthorizedHandler(() => { api.setSession('', 'A'); setSession(null); setState(null) })
-  }, [])
+    api.setUnauthorizedHandler(logout)
+  }, [logout])
 
   useEffect(() => {
-    if (session) refresh().catch((e: Error) => { if (!(e instanceof api.UnauthorizedError)) toast('error', e.message) })
+    if (!session) return
+    const mine = epoch.current
+    refresh().catch((e: Error) => {
+      if (e instanceof api.UnauthorizedError || mine !== epoch.current) return
+      toast('error', e.message)
+      setLoadError(e.message)
+    })
   }, [refresh, toast, session, plant])
 
-  const onReady = (s: Session) => { api.setSession(s.token, s.plant); setPlant(s.plant); setSession(s) }
-  const switchPlant = (id: string) => { if (!session) return; api.setSession(session.token, id); setState(null); setPlant(id) }
+  const onReady = (s: Session) => { api.setSession(s.token, s.plant); resetView(s.plant); setSession(s) }
+  const switchPlant = (id: string) => { if (!session) return; api.setSession(session.token, id); resetView(id) }
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
@@ -62,8 +87,8 @@ export default function App() {
   // can't reload the replay; when it does reload (new run, new data) it resumes at the viewer's minute.
   const missionKey = state?.mission_key
   const missionSrc = useMemo(
-    () => (missionKey === undefined ? '' : api.missionUrl(scenario, missionKey, playhead.current)),
-    [scenario, missionKey],
+    () => (missionKey === undefined ? '' : api.missionUrl(scenario, missionKey, plant, session?.token ?? '', playhead.current)),
+    [scenario, missionKey, plant, session?.token],
   )
 
   // Every write goes through one place: lock the buttons, call the API, redraw from server truth.
@@ -82,7 +107,15 @@ export default function App() {
   }
 
   if (!session) return <Login onReady={onReady} />
-  if (!state) return <main><p className="mut">Loading console…</p><Toasts toasts={toasts} /></main>
+  if (!state) {
+    return (
+      <main>
+        <p className="mut">{loadError || 'Loading console…'}</p>
+        {loadError && <button onClick={logout}>Back to login</button>}
+        <Toasts toasts={toasts} />
+      </main>
+    )
+  }
 
   const fireActive = state.fire.volume_m3 > 0
   const firePct = (state.fire.volume_m3 / state.metrics.capacity_m3) * 100
